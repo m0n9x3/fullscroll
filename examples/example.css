@@ -1,0 +1,192 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Sans+KR:wght@400;600;800&display=swap');
+
+:root {
+  color-scheme: dark;
+  font-family: 'Manrope', 'Noto Sans KR', sans-serif;
+  --fs-dot-size: 9px;
+  --fs-dot-gap: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: #0b0c10;
+}
+
+body {
+  color: #fff;
+}
+
+.panel {
+  position: relative;
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(32px, 8vw, 140px);
+  isolation: isolate;
+}
+
+.panel::before {
+  position: absolute;
+  inset: 8%;
+  z-index: -1;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 32px;
+  content: '';
+}
+
+.eyebrow {
+  margin: 0 0 20px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  max-width: 980px;
+  margin: 0;
+  font-size: clamp(48px, 8vw, 128px);
+  line-height: 0.96;
+  letter-spacing: -0.065em;
+}
+
+h2 {
+  font-size: clamp(42px, 6.4vw, 104px);
+}
+
+.panel > p:last-child,
+.scroll-card > p {
+  max-width: 680px;
+  margin-top: 28px;
+  font-size: clamp(16px, 1.6vw, 22px);
+  line-height: 1.65;
+}
+
+code {
+  padding: 0.15em 0.35em;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 18%);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.panel-coral {
+  background: #ff5d4a;
+}
+
+.panel-violet {
+  background: #6f5cff;
+}
+
+.panel-night {
+  background: radial-gradient(circle at 78% 24%, #38445f, #111522 55%);
+}
+
+.panel-paper {
+  color: #141414;
+  background: #f3eee3;
+}
+
+.panel-mint {
+  background: #157b68;
+}
+
+.panel-blue {
+  background: #087dcd;
+}
+
+.panel-gold {
+  color: #18130a;
+  background: #ffbd2e;
+}
+
+.panel-black {
+  background: #090909;
+}
+
+.scroll-card {
+  width: min(900px, 100%);
+  max-height: min(72vh, 680px);
+  padding: clamp(26px, 5vw, 64px);
+  border: 1px solid rgb(255 255 255 / 25%);
+  border-radius: 28px;
+  background: rgb(0 0 0 / 14%);
+}
+
+.scroll-card h2 {
+  font-size: clamp(38px, 5vw, 72px);
+}
+
+.long-copy {
+  display: grid;
+  gap: 28px;
+  margin-top: 56px;
+  padding-bottom: 28px;
+  font-size: clamp(18px, 2vw, 26px);
+  line-height: 1.7;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 40px;
+}
+
+button {
+  padding: 14px 22px;
+  border: 1px solid #fff;
+  border-radius: 999px;
+  color: #090909;
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+output {
+  color: rgb(255 255 255 / 65%);
+  font-size: 14px;
+}
+
+[fs][fs-ready] .panel > :not(.scroll-card) {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 500ms ease, transform 700ms ease;
+}
+
+[fs][fs-ready] .panel[fs-active] > :not(.scroll-card),
+[fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .panel[fs-active] > * {
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 720px) {
+  .panel {
+    min-height: 86vh;
+    padding: 72px 28px;
+  }
+
+  .panel::before {
+    inset: 16px;
+    border-radius: 22px;
+  }
+
+  h1,
+  h2 {
+    letter-spacing: -0.05em;
+  }
+
+  .scroll-card {
+    max-height: none;
+    overflow: visible;
+  }
+}

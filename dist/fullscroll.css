@@ -1,0 +1,88 @@
+/* src/fullscroll.css */
+:root {
+  --fs-dot-size: 10px;
+  --fs-dot-gap: 10px;
+  --fs-dot-color: rgba(255, 255, 255, 0.5);
+  --fs-dot-active-color: #fff;
+  --fs-dot-outline: #111;
+}
+[fs] {
+  position: relative;
+  width: 100%;
+}
+[fs][fs-ready] {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  touch-action: none;
+}
+[fs][fs-ready] > .fs-vertical-wrapper,
+[fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide,
+[fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper,
+[fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .swiper-slide {
+  width: 100%;
+  height: 100%;
+}
+[fs][fs-ready] .swiper-wrapper {
+  transition-timing-function: var(--fs-easing, ease);
+}
+[fs] [fs-scroll] {
+  max-height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+[fs][fs-responsive],
+[fs][fs-disabled] {
+  height: auto;
+  overflow: visible;
+}
+[fs][fs-responsive] > section,
+[fs][fs-responsive] > [fs-page],
+[fs][fs-disabled] > section,
+[fs][fs-disabled] > [fs-page] {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.fs-nav {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: var(--fs-dot-gap);
+}
+.fs-nav-vertical {
+  top: 50%;
+  right: 20px;
+  flex-direction: column;
+  transform: translateY(-50%);
+}
+.fs-nav-horizon {
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.fs-dot {
+  width: var(--fs-dot-size);
+  height: var(--fs-dot-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fs-dot-color);
+  cursor: pointer;
+  appearance: none;
+}
+.fs-dot[aria-current=true] {
+  background: var(--fs-dot-active-color);
+  transform: scale(1.25);
+}
+.fs-dot:focus-visible {
+  outline: 2px solid var(--fs-dot-outline);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [fs] .swiper-wrapper {
+    transition-duration: 0ms !important;
+  }
+}

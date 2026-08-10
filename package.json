@@ -1,0 +1,51 @@
+{
+  "name": "@fullscroll/core",
+  "version": "1.0.0",
+  "description": "Publisher-friendly full-page scrolling powered by an external Swiper runtime.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/fullscroll.js",
+  "module": "./dist/fullscroll.esm.js",
+  "types": "./dist/fullscroll.d.ts",
+  "style": "./dist/fullscroll.css",
+  "exports": {
+    ".": {
+      "types": "./dist/fullscroll.d.ts",
+      "import": "./dist/fullscroll.esm.js",
+      "default": "./dist/fullscroll.esm.js"
+    },
+    "./style.css": "./dist/fullscroll.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "FEATURES.md",
+    "ROADMAP.md",
+    "AI_GUIDE.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs && node scripts/build-mobile-demo.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "node --check src/fullscroll.js && node --check src/browser.js && node --check examples/mobile/entry.js && node --check scripts/build-mobile-demo.mjs && vitest run && npm run build"
+  },
+  "peerDependencies": {
+    "swiper": ">=14.0.0 <15.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "swiper": "^14.0.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "fullpage",
+    "scroll",
+    "swiper",
+    "vanilla-javascript",
+    "horizontal-scroll",
+    "snap-scroll"
+  ],
+  "license": "MIT"
+}

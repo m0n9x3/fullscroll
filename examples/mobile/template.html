@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>FullScroll 모바일 동작 데모</title>
+    <!-- FULLSCROLL_MOBILE_CSS -->
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --fs-dot-size: 7px;
+        --fs-dot-gap: 8px;
+        --fs-dot-color: rgb(255 255 255 / 32%);
+        --fs-dot-active-color: #fff;
+        --fs-dot-outline: #111;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        background: #090b10;
+      }
+
+      body {
+        color: #fff;
+      }
+
+      [fs] {
+        position: relative;
+        width: 100%;
+      }
+
+      [fs][fs-ready] {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden;
+        touch-action: none;
+      }
+
+      [fs][fs-ready] > .fs-vertical-wrapper,
+      [fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide,
+      [fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper,
+      [fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .swiper-slide {
+        width: 100%;
+        height: 100%;
+      }
+
+      [fs][fs-ready] .swiper-wrapper {
+        transition-timing-function: var(--fs-easing, ease);
+      }
+
+      [fs] [fs-scroll] {
+        max-height: 100%;
+        overflow: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .demo-status {
+        position: fixed;
+        top: max(18px, env(safe-area-inset-top));
+        right: 20px;
+        left: 20px;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: rgb(255 255 255 / 72%);
+        font-size: 10px;
+        letter-spacing: 0.13em;
+        pointer-events: none;
+      }
+
+      .demo-status output {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mobile-panel {
+        position: relative;
+        display: flex;
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        overflow: hidden;
+        padding: max(76px, calc(env(safe-area-inset-top) + 58px)) 26px max(62px, calc(env(safe-area-inset-bottom) + 42px));
+      }
+
+      .mobile-panel::after {
+        position: absolute;
+        inset: 54px 14px 18px;
+        z-index: -1;
+        border: 1px solid rgb(255 255 255 / 15%);
+        border-radius: 28px;
+        content: '';
+      }
+
+      .step {
+        position: absolute;
+        right: 28px;
+        bottom: 32px;
+        color: rgb(255 255 255 / 42%);
+        font-size: 64px;
+        font-weight: 800;
+        letter-spacing: -0.08em;
+      }
+
+      .kicker {
+        margin: 0 0 18px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.17em;
+      }
+
+      h1,
+      h2 {
+        max-width: 340px;
+        margin: 0;
+        font-size: clamp(48px, 14vw, 66px);
+        line-height: 0.98;
+        letter-spacing: -0.07em;
+        word-break: keep-all;
+      }
+
+      .description {
+        max-width: 315px;
+        margin: 24px 0 0;
+        color: rgb(255 255 255 / 72%);
+        font-size: 15px;
+        line-height: 1.65;
+        word-break: keep-all;
+      }
+
+      .gesture {
+        position: absolute;
+        bottom: 34px;
+        left: 28px;
+        width: 44px;
+        height: 44px;
+        border: 1px solid rgb(255 255 255 / 38%);
+        border-radius: 50%;
+        font-size: 22px;
+        line-height: 40px;
+        text-align: center;
+        animation: gesture 1.6s ease-in-out infinite;
+      }
+
+      .opening-a {
+        background: linear-gradient(155deg, #ff634f, #f04474);
+      }
+
+      .opening-b {
+        background: linear-gradient(155deg, #704cff, #3c35b5);
+      }
+
+      .opening-c {
+        background: radial-gradient(circle at 80% 18%, #506180, #121724 58%);
+      }
+
+      .vertical-panel {
+        color: #171717;
+        background: #f1ebdf;
+      }
+
+      .vertical-panel::after {
+        border-color: rgb(0 0 0 / 14%);
+      }
+
+      .vertical-panel .step {
+        color: rgb(0 0 0 / 18%);
+      }
+
+      .metric-grid {
+        display: grid;
+        width: 100%;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+        margin-top: 38px;
+      }
+
+      .metric-grid div {
+        display: flex;
+        min-height: 92px;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 14px;
+        border: 1px solid rgb(0 0 0 / 14%);
+        border-radius: 16px;
+      }
+
+      .metric-grid strong {
+        font-size: 28px;
+      }
+
+      .metric-grid span {
+        font-size: 10px;
+      }
+
+      .reading-panel {
+        justify-content: stretch;
+        padding-right: 16px;
+        padding-left: 16px;
+        background: #087c68;
+      }
+
+      .reading-scroll {
+        width: 100%;
+        max-height: calc(100dvh - max(112px, calc(env(safe-area-inset-top) + env(safe-area-inset-bottom) + 92px)));
+        padding: 22px 12px 60px;
+        border: 1px solid rgb(255 255 255 / 18%);
+        border-radius: 24px;
+        background: rgb(0 0 0 / 10%);
+      }
+
+      .reading-scroll .step {
+        position: static;
+        display: block;
+        margin-bottom: 22px;
+        font-size: 42px;
+      }
+
+      .reading-scroll h2 {
+        font-size: clamp(42px, 12vw, 58px);
+      }
+
+      .reading-card {
+        display: flex;
+        min-height: 230px;
+        flex-direction: column;
+        justify-content: flex-end;
+        margin-top: 14px;
+        padding: 24px;
+        border-radius: 20px;
+        color: #14201d;
+        background: #d8f56c;
+      }
+
+      .reading-card:nth-of-type(2) {
+        background: #77e8d0;
+      }
+
+      .reading-card.final-card {
+        background: #fff;
+      }
+
+      .reading-card small {
+        margin-bottom: auto;
+        font-size: 9px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+      }
+
+      .reading-card strong {
+        font-size: 24px;
+        letter-spacing: -0.04em;
+      }
+
+      .reading-card p {
+        margin: 8px 0 0;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .ending-a {
+        background: #087dcc;
+      }
+
+      .ending-b {
+        color: #1b1304;
+        background: #ffbd2e;
+      }
+
+      .ending-b::after {
+        border-color: rgb(0 0 0 / 14%);
+      }
+
+      .ending-b .description {
+        color: rgb(0 0 0 / 58%);
+      }
+
+      .ending-b .step {
+        color: rgb(0 0 0 / 18%);
+      }
+
+      .ending-c {
+        background: #0a0a0b;
+      }
+
+      #restart {
+        margin-top: 34px;
+        padding: 14px 20px;
+        border: 0;
+        border-radius: 999px;
+        color: #111;
+        background: #fff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      [fs][fs-ready] .mobile-panel > :not(.reading-scroll) {
+        opacity: 0;
+        transform: translateY(22px);
+        transition: opacity 380ms ease, transform 560ms ease;
+      }
+
+      [fs][fs-ready] .mobile-panel[fs-active] > :not(.reading-scroll),
+      [fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .mobile-panel[fs-active] > * {
+        opacity: 1;
+        transform: none;
+      }
+
+      .fs-nav {
+        position: absolute;
+        z-index: 20;
+        display: flex;
+        gap: var(--fs-dot-gap);
+      }
+
+      .fs-nav-vertical {
+        top: auto;
+        right: 22px;
+        bottom: max(24px, env(safe-area-inset-bottom));
+        flex-direction: row;
+        transform: none;
+      }
+
+      .fs-nav-horizon {
+        bottom: max(25px, env(safe-area-inset-bottom));
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .fs-dot {
+        width: var(--fs-dot-size);
+        height: var(--fs-dot-size);
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 999px;
+        background: var(--fs-dot-color);
+        cursor: pointer;
+        appearance: none;
+      }
+
+      .fs-dot[aria-current='true'] {
+        background: var(--fs-dot-active-color);
+        transform: scale(1.25);
+      }
+
+      .fs-dot:focus-visible {
+        outline: 2px solid var(--fs-dot-outline);
+        outline-offset: 3px;
+      }
+
+      @keyframes gesture {
+        0%,
+        100% {
+          transform: translateY(4px);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
+
+      @media (min-width: 721px) {
+        .mobile-panel {
+          padding-right: max(26px, calc((100vw - 430px) / 2));
+          padding-left: max(26px, calc((100vw - 430px) / 2));
+        }
+
+        .mobile-panel::after {
+          right: max(14px, calc((100vw - 460px) / 2));
+          left: max(14px, calc((100vw - 460px) / 2));
+        }
+
+        .demo-status {
+          right: max(20px, calc((100vw - 430px) / 2));
+          left: max(20px, calc((100vw - 430px) / 2));
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        [fs] .swiper-wrapper {
+          transition-duration: 0ms !important;
+        }
+
+        .gesture {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-status" fs-ignore>
+      <strong>FULLSCROLL · MOBILE</strong>
+      <output id="route-status" aria-live="polite">1 / 8</output>
+    </div>
+
+    <main fs>
+      <section fs-horizon fs-anchor="opening" aria-label="오프닝 가로 슬라이드">
+        <article class="mobile-panel opening-a">
+          <span class="step">01</span>
+          <p class="kicker">SWIPE UP</p>
+          <h1>모바일도<br>한 번에 한 장</h1>
+          <p class="description">화면을 위로 밀어 다음 장으로 이동해 보세요.</p>
+          <span class="gesture" aria-hidden="true">↑</span>
+        </article>
+        <article class="mobile-panel opening-b">
+          <span class="step">02</span>
+          <p class="kicker">HORIZONTAL ROUTE</p>
+          <h2>위로 밀어도<br>가로 장면 전환</h2>
+          <p class="description">화면 방향과 이동 경로를 FullScroll이 분리해서 처리합니다.</p>
+        </article>
+        <article class="mobile-panel opening-c">
+          <span class="step">03</span>
+          <p class="kicker">ONE GESTURE</p>
+          <h2>연속으로 밀어도<br>한 장씩 정확하게</h2>
+          <p class="description">이 장의 다음 순서는 세로 페이지입니다.</p>
+        </article>
+      </section>
+
+      <section fs-anchor="vertical" class="mobile-panel vertical-panel">
+        <span class="step">04</span>
+        <p class="kicker">VERTICAL PAGE</p>
+        <h2>가로에서<br>세로로 자연스럽게</h2>
+        <div class="metric-grid">
+          <div><strong>1</strong><span>제스처</span></div>
+          <div><strong>1</strong><span>페이지</span></div>
+          <div><strong>0</strong><span>추가 클래스</span></div>
+        </div>
+      </section>
+
+      <section fs-anchor="reading" class="mobile-panel reading-panel">
+        <div class="reading-scroll" fs-scroll>
+          <span class="step">05</span>
+          <p class="kicker">INNER SCROLL</p>
+          <h2>카드 안을<br>먼저 읽습니다</h2>
+          <p class="description">아래 카드를 스크롤해 보세요. 카드의 끝에 도착한 후 새 제스처를 해야 다음 장으로 이동합니다.</p>
+
+          <div class="reading-card">
+            <small>SCROLL AREA · 01</small>
+            <strong>내부 스크롤 우선</strong>
+            <p>움직일 공간이 남아 있으면 페이지 전환을 실행하지 않습니다.</p>
+          </div>
+          <div class="reading-card">
+            <small>SCROLL AREA · 02</small>
+            <strong>경계 자동 판단</strong>
+            <p>맨 아래와 맨 위에서만 FullScroll의 이동 경로로 제어권을 넘깁니다.</p>
+          </div>
+          <div class="reading-card final-card">
+            <small>SCROLL AREA · 03</small>
+            <strong>한 번 더 밀어보세요</strong>
+            <p>이 카드의 끝에서 손을 떼고 다시 위로 밀면 마지막 가로 그룹으로 갑니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section fs-horizon fs-anchor="ending" aria-label="엔딩 가로 슬라이드">
+        <article class="mobile-panel ending-a">
+          <span class="step">06</span>
+          <p class="kicker">HORIZONTAL AGAIN</p>
+          <h2>세로 다음에<br>다시 가로</h2>
+          <p class="description">콘텐츠 구조가 바뀌어도 입력 방식은 그대로입니다.</p>
+        </article>
+        <article class="mobile-panel ending-b">
+          <span class="step">07</span>
+          <p class="kicker">TOUCH + WHEEL + KEY</p>
+          <h2>입력은 달라도<br>경로는 하나</h2>
+          <p class="description">터치, 휠, 키보드가 모두 같은 순서로 이동합니다.</p>
+        </article>
+        <article class="mobile-panel ending-c">
+          <span class="step">08</span>
+          <p class="kicker">FULLSCROLL 1.0.0</p>
+          <h2>모바일 동작<br>데모 완료</h2>
+          <button type="button" id="restart" fs-ignore>처음부터 다시 보기</button>
+        </article>
+      </section>
+    </main>
+
+    <!-- FULLSCROLL_MOBILE_SCRIPT -->
+  </body>
+</html>

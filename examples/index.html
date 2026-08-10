@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll 1.0.0 데모</title>
+    <link rel="stylesheet" href="../node_modules/swiper/swiper-bundle.min.css">
+    <link rel="stylesheet" href="../dist/fullscroll.css">
+    <link rel="stylesheet" href="./example.css">
+  </head>
+  <body>
+    <main fs>
+      <section fs-horizon fs-anchor="intro" aria-label="인트로 가로 그룹">
+        <article class="panel panel-coral">
+          <p class="eyebrow">FullScroll 1.0.0</p>
+          <h1>가로와 세로를<br>하나의 흐름으로</h1>
+          <p>아래로 휠을 한 번씩 움직여 보세요.</p>
+        </article>
+        <article class="panel panel-violet">
+          <p class="eyebrow">01 · HORIZONTAL</p>
+          <h2>작성자는 슬라이드<br>클래스를 붙이지 않습니다</h2>
+          <p><code>fs-horizon</code>의 직계 요소를 자동으로 구성합니다.</p>
+        </article>
+        <article class="panel panel-night">
+          <p class="eyebrow">02 · ONE GESTURE</p>
+          <h2>한 제스처에<br>정확히 한 장</h2>
+          <p>이 장 다음에는 세로 페이지로 이어집니다.</p>
+        </article>
+      </section>
+
+      <section fs-anchor="vertical" class="panel panel-paper">
+        <p class="eyebrow">03 · VERTICAL</p>
+        <h2>세로 페이지도<br>같은 Swiper 엔진으로</h2>
+        <p>방향이 바뀌어도 사용자는 하나의 연속된 이야기로 느낍니다.</p>
+      </section>
+
+      <section fs-anchor="scroll" class="panel panel-mint">
+        <div class="scroll-card" fs-scroll>
+          <p class="eyebrow">04 · INNER SCROLL</p>
+          <h2>내용을 먼저 읽고<br>끝에서 다음 장으로</h2>
+          <p>이 카드 위에서 스크롤하면 내부 내용이 우선 움직입니다.</p>
+          <div class="long-copy">
+            <p>FullScroll은 이벤트 대상에서 가장 가까운 <code>fs-scroll</code> 영역을 찾습니다.</p>
+            <p>아직 아래로 움직일 공간이 있으면 브라우저의 기본 스크롤을 유지합니다.</p>
+            <p>카드의 끝에 도착한 뒤 새 휠 제스처가 들어올 때 다음 바닥으로 이동합니다.</p>
+            <p>반대 방향도 같습니다. 맨 위에서만 이전 바닥으로 돌아갑니다.</p>
+            <p>스크롤을 마친 뒤 한 번 더 내려 마지막 가로 그룹을 확인하세요.</p>
+          </div>
+        </div>
+      </section>
+
+      <section fs-horizon fs-anchor="finish" aria-label="마지막 가로 그룹">
+        <article class="panel panel-blue">
+          <p class="eyebrow">05 · HORIZONTAL AGAIN</p>
+          <h2>가로로 다시 전환</h2>
+          <p>가로 → 세로 → 세로 → 가로 경로가 끊기지 않습니다.</p>
+        </article>
+        <article class="panel panel-gold">
+          <p class="eyebrow">06 · RESPONSIVE</p>
+          <h2>720px 이하는<br>일반 세로 문서</h2>
+          <p>작은 화면에서 풀페이지를 강제하지 않는 기본 전략입니다.</p>
+        </article>
+        <article class="panel panel-black">
+          <p class="eyebrow">07 · API</p>
+          <h2>FullScroll 1.0.0</h2>
+          <div class="actions" fs-ignore>
+            <button type="button" id="go-first">처음으로</button>
+            <output id="event-log" aria-live="polite">준비됨</output>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="../node_modules/swiper/swiper-bundle.min.js"></script>
+    <script src="../dist/fullscroll.js"></script>
+    <script>
+      const root = document.querySelector('[fs]');
+      const log = document.querySelector('#event-log');
+      const fullscroll = new FullScroll(root, {
+        dots: true,
+        breakpoint: 720
+      });
+
+      root.addEventListener('fullscroll:change', (event) => {
+        const destination = event.detail.destination;
+        log.textContent = `현재 경로 ${destination.index + 1} / ${fullscroll.state.total}`;
+      });
+
+      document.querySelector('#go-first').addEventListener('click', () => {
+        fullscroll.moveTo('intro');
+      });
+
+      window.fullscrollDemo = fullscroll;
+    </script>
+  </body>
+</html>
