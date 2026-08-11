@@ -291,6 +291,7 @@ function syncNavigation(root, horizons, route) {
 var STATIC_EFFECTS = Object.freeze({
   slide: { effect: "slide" },
   fade: { effect: "fade", fadeEffect: { crossFade: true } },
+  blur: { effect: "fade", fadeEffect: { crossFade: true } },
   zoom: {
     effect: "creative",
     creativeEffect: {
@@ -900,6 +901,7 @@ var FullScroll = class {
         horizon.page.classList.add("swiper", "fs-horizon-runtime");
         const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute("fs-flow"));
         const effect = hasFlowSlide ? "slide" : horizon.effect ?? horizontalEffect;
+        horizon.page.setAttribute("fs-effect-active", effect);
         const initialSlide = currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null ? currentRoute.slideIndex : 0;
         horizon.swiper = new this.Swiper(horizon.page, {
           ...this.options.horizontalSwiper,
@@ -919,9 +921,11 @@ var FullScroll = class {
         });
         runtime.horizons.push(horizon);
       }
+      const rootRuntimeEffect = hasFlowPage ? "slide" : rootEffect;
+      this.root.setAttribute("fs-effect-active", rootRuntimeEffect);
       this.rootSwiper = new this.Swiper(this.root, {
         ...this.options.verticalSwiper,
-        ...effectOptions(hasFlowPage ? "slide" : rootEffect, "vertical"),
+        ...effectOptions(rootRuntimeEffect, "vertical"),
         direction: "vertical",
         slidesPerView: hasFlowPage ? "auto" : 1,
         ...hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
@@ -1073,13 +1077,12 @@ var FullScroll = class {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
         const flowView = resolveFlowView({ horizon, destination });
-        const transition = this.transitionTo(
+        await this.transitionTo(
           horizon.swiper,
           destination.slideIndex,
           duration,
           flowView?.offset ?? null
         );
-        await transition;
         this.flowView = flowView;
       } else {
         this.flowView = null;

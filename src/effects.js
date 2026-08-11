@@ -1,6 +1,7 @@
 const STATIC_EFFECTS = Object.freeze({
   slide: { effect: 'slide' },
   fade: { effect: 'fade', fadeEffect: { crossFade: true } },
+  blur: { effect: 'fade', fadeEffect: { crossFade: true } },
   zoom: {
     effect: 'creative',
     creativeEffect: {

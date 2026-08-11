@@ -199,6 +199,26 @@ describe('FullScroll 1.3.0', () => {
     expect(FakeSwiper.instances[0].options.creativeEffect.prev.translate).toEqual([0, '-110%', -260]);
   });
 
+  it('uses Fade transport and runtime markers for blur', () => {
+    const root = mount(`
+      <main fs fs-effect="blur">
+        <section fs-horizon>
+          <article>One</article><article>Two</article>
+        </section>
+        <section>Three</section>
+      </main>
+    `);
+    create(root);
+
+    const horizon = root.querySelector('[fs-horizon]');
+    expect(FakeSwiper.instances[0].options.effect).toBe('fade');
+    expect(FakeSwiper.instances[0].options.fadeEffect.crossFade).toBe(true);
+    expect(FakeSwiper.instances[1].options.effect).toBe('fade');
+    expect(FakeSwiper.instances[1].options.fadeEffect.crossFade).toBe(true);
+    expect(root.getAttribute('fs-effect-active')).toBe('blur');
+    expect(horizon?.getAttribute('fs-effect-active')).toBe('blur');
+  });
+
   it('forces slide transitions for every fs-flow viewport', () => {
     const root = mount(`
       <main fs fs-effect="fade">
@@ -215,6 +235,8 @@ describe('FullScroll 1.3.0', () => {
 
     expect(FakeSwiper.instances[0].options.effect).toBe('slide');
     expect(FakeSwiper.instances[1].options.effect).toBe('slide');
+    expect(root.getAttribute('fs-effect-active')).toBe('slide');
+    expect(root.querySelector('[fs-horizon]')?.getAttribute('fs-effect-active')).toBe('slide');
   });
 
   it('keeps fs-flow sizing and directional companion rules on the public route', () => {

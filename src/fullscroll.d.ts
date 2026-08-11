@@ -38,7 +38,7 @@ export interface FullScrollOptions {
   touchThreshold?: number;
   dots?: boolean;
   history?: boolean;
-  effect?: 'slide' | 'fade' | 'creative' | 'depth' | 'layers' | 'zoom';
+  effect?: 'slide' | 'fade' | 'blur' | 'creative' | 'depth' | 'layers' | 'zoom';
   stepReentry?: 'preserve' | 'first' | 'last';
   themeTarget?: string;
   Swiper?: typeof Swiper;

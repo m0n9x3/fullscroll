@@ -62,7 +62,7 @@
 
 ## 화면 연출과 활성 상태
 
-- [x] `slide`, `fade`, `creative`, `depth`, `layers`, `zoom` 전환 효과
+- [x] `slide`, `fade`, `blur`, `creative`, `depth`, `layers`, `zoom` 전환 효과
 - [x] 세로 전환에 맞춘 creative·depth·layers의 Y축 구성
 - [x] Flow 영역에서 자연 크기를 보존하는 slide 효과 고정
 - [x] `[fs-theme]`와 `themeTarget`의 테마 자동 동기화 및 원래 테마 복원

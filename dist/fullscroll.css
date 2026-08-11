@@ -44,6 +44,25 @@
 [fs][fs-ready] .swiper-slide-shadow {
   transition-timing-function: var(--fs-easing, ease);
 }
+[fs][fs-effect-active=blur] > .fs-vertical-wrapper > .swiper-slide,
+[fs-horizon][fs-effect-active=blur] > .fs-horizon-wrapper > .swiper-slide {
+  transition-property:
+    opacity,
+    filter,
+    transform;
+}
+[fs][fs-effect-active=blur] > .fs-vertical-wrapper > .swiper-slide-prev,
+[fs][fs-effect-active=blur] > .fs-vertical-wrapper > .swiper-slide-next,
+[fs-horizon][fs-effect-active=blur] > .fs-horizon-wrapper > .swiper-slide-prev,
+[fs-horizon][fs-effect-active=blur] > .fs-horizon-wrapper > .swiper-slide-next {
+  filter: blur(24px);
+  transform: scale(1.035);
+}
+[fs][fs-effect-active=blur] > .fs-vertical-wrapper > .swiper-slide-active,
+[fs-horizon][fs-effect-active=blur] > .fs-horizon-wrapper > .swiper-slide-active {
+  filter: blur(0);
+  transform: scale(1);
+}
 [fs] [fs-scroll] {
   max-height: 100%;
   overflow-x: hidden;
@@ -112,5 +131,9 @@
 @media (prefers-reduced-motion: reduce) {
   [fs] .swiper-wrapper {
     transition-duration: 0ms !important;
+  }
+  [fs][fs-effect-active=blur] .swiper-slide {
+    filter: none;
+    transform: none;
   }
 }

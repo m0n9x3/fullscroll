@@ -216,6 +216,9 @@ new FullScroll('[fs]', { themeTarget: '#header, .quick, .btn_all' });
 | `depth` | 뒤쪽 깊이로 밀려나는 전환 |
 | `layers` | 양쪽 레이어가 회전하며 쌓이는 전환 |
 | `zoom` | 원근 확대·축소 전환 |
+| `blur` | 흐림·축소가 더해진 Fade 전환 |
+
+`blur`는 별도 자산 없이 적용되며, Fade 전환에 흐림과 미세 확대를 더합니다.
 
 `fs-flow`가 있는 세로 루트 또는 가로 그룹은 자연 크기와 인접 슬라이드 노출을 보존하기 위해 항상 `slide`로 동작합니다. `fs-effect`, `effect`, `verticalSwiper.effect`, `horizontalSwiper.effect`보다 우선합니다.
 
