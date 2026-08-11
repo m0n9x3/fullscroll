@@ -3,8 +3,9 @@ var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { en
 var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // src/config.js
-var VERSION = "1.0.0";
+var VERSION = "1.3.0";
 var INTERACTIVE_SELECTOR = 'input, textarea, select, option, button, [contenteditable="true"], [contenteditable=""]';
+var WHEEL_INTERACTIVE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
 var DEFAULTS = Object.freeze({
   speed: 700,
   easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
@@ -36,9 +37,10 @@ function createOptions(options = {}) {
 // src/dom.js
 function resolveElement(target) {
   if (typeof target === "string") {
-    return document.querySelector(target);
+    const element = document.querySelector(target);
+    return element instanceof HTMLElement ? element : null;
   }
-  return target instanceof Element ? target : null;
+  return target instanceof HTMLElement ? target : null;
 }
 function getDirectPages(root) {
   return Array.from(root.children).filter(
@@ -69,19 +71,136 @@ function closestWithin(root, target, selector) {
 function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
 }
-function canScroll(element, direction) {
-  if (!element || element.scrollHeight <= element.clientHeight + 1) {
-    return false;
+
+// src/controls.js
+var CONTROL_SELECTOR = "[fs-prev], [fs-next], [fs-move], [fs-current], [fs-total], [fs-progress]";
+function moveReference(element) {
+  const direct = element.getAttribute("fs-move")?.trim();
+  if (direct) return direct;
+  const href = element.getAttribute("href");
+  if (!href) return null;
+  try {
+    return new URL(href, document.baseURI).hash || null;
+  } catch {
+    return null;
   }
-  if (direction > 0) {
-    return element.scrollTop + element.clientHeight < element.scrollHeight - 1;
-  }
-  return element.scrollTop > 1;
 }
-function getScrollPosition(element) {
-  if (!element) return null;
-  const maximum = Math.max(0, element.scrollHeight - element.clientHeight);
-  return clamp(element.scrollTop, 0, maximum);
+function isDisableable(element) {
+  return element instanceof HTMLButtonElement || element instanceof HTMLInputElement;
+}
+function originalAttribute(snapshot, name) {
+  return snapshot.attributes.find(([attribute]) => attribute === name)?.[1] ?? null;
+}
+function setValueState(element, snapshot, name, value) {
+  if (value !== null) {
+    element.setAttribute(name, value);
+    return;
+  }
+  const original = originalAttribute(snapshot, name);
+  if (original === null) element.removeAttribute(name);
+  else element.setAttribute(name, original);
+}
+function createControls({ isActive, resolveRoute, onPrev, onNext, onMove, warn }) {
+  const elements = Array.from(document.querySelectorAll(CONTROL_SELECTOR));
+  const snapshots = /* @__PURE__ */ new Map();
+  const listeners = [];
+  for (const element of elements) {
+    snapshots.set(element, {
+      attributes: captureAttributes(element),
+      childNodes: Array.from(element.childNodes)
+    });
+  }
+  const listen = (element, callback) => {
+    element.addEventListener("click", callback);
+    listeners.push([element, callback]);
+  };
+  elements.filter((element) => element.hasAttribute("fs-prev")).forEach((element) => {
+    listen(element, (event) => {
+      if (!isActive() || element.getAttribute("aria-disabled") === "true") {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      onPrev();
+    });
+  });
+  elements.filter((element) => element.hasAttribute("fs-next")).forEach((element) => {
+    listen(element, (event) => {
+      if (!isActive() || element.getAttribute("aria-disabled") === "true") {
+        event.preventDefault();
+        return;
+      }
+      event.preventDefault();
+      onNext();
+    });
+  });
+  const moves = elements.filter((element) => element.hasAttribute("fs-move")).map((element) => {
+    const reference = moveReference(element);
+    const routeIndex = reference ? resolveRoute(reference) : null;
+    if (routeIndex === null) {
+      warn(`fs-move \uB300\uC0C1\uC744 \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4: ${reference ?? "(\uBE44\uC5B4 \uC788\uC74C)"}`);
+    }
+    listen(element, (event) => {
+      if (!isActive() || routeIndex === null) return;
+      event.preventDefault();
+      onMove(routeIndex);
+    });
+    return { element, routeIndex };
+  });
+  function sync({ active, currentIndex, total }) {
+    const safeTotal = Math.max(0, total);
+    const humanIndex = safeTotal === 0 ? 0 : currentIndex + 1;
+    const ratio = safeTotal === 0 ? 0 : humanIndex / safeTotal;
+    for (const element of elements) {
+      const snapshot = snapshots.get(element);
+      if (element.hasAttribute("fs-current")) {
+        element.replaceChildren(String(humanIndex));
+      }
+      if (element.hasAttribute("fs-total")) {
+        element.replaceChildren(String(safeTotal));
+      }
+      if (element.hasAttribute("fs-progress")) {
+        element.style.setProperty("--fs-progress", String(ratio));
+        setValueState(element, snapshot, "aria-valuemin", "1");
+        setValueState(element, snapshot, "aria-valuemax", String(safeTotal));
+        setValueState(element, snapshot, "aria-valuenow", String(humanIndex));
+        setValueState(element, snapshot, "aria-valuetext", `${humanIndex} / ${safeTotal}`);
+        if (element instanceof HTMLProgressElement) {
+          element.max = safeTotal || 1;
+          element.value = humanIndex;
+        } else if (!element.hasAttribute("role")) {
+          element.setAttribute("role", "progressbar");
+        }
+      }
+      if (element.hasAttribute("fs-prev") || element.hasAttribute("fs-next")) {
+        const authorDisabled = originalAttribute(snapshot, "disabled") !== null || originalAttribute(snapshot, "aria-disabled") === "true";
+        const unavailable = !active || authorDisabled || safeTotal === 0 || element.hasAttribute("fs-prev") && currentIndex <= 0 || element.hasAttribute("fs-next") && currentIndex >= safeTotal - 1;
+        setValueState(element, snapshot, "aria-disabled", unavailable ? "true" : null);
+        if (isDisableable(element)) {
+          element.disabled = unavailable;
+        }
+      }
+    }
+    for (const { element, routeIndex } of moves) {
+      const snapshot = snapshots.get(element);
+      setValueState(
+        element,
+        snapshot,
+        "aria-current",
+        routeIndex !== null && routeIndex === currentIndex ? "page" : null
+      );
+    }
+  }
+  function destroy() {
+    listeners.forEach(([element, callback]) => element.removeEventListener("click", callback));
+    for (const [element, snapshot] of snapshots) {
+      restoreAttributes(element, snapshot.attributes);
+      if (element.hasAttribute("fs-current") || element.hasAttribute("fs-total")) {
+        element.replaceChildren(...snapshot.childNodes);
+      }
+    }
+  }
+  return { sync, destroy };
 }
 
 // src/gestures.js
@@ -166,6 +285,36 @@ function syncNavigation(root, horizons, route) {
 }
 
 // src/routes.js
+var FLOW_RELATIONS = /* @__PURE__ */ new Set(["prev", "next"]);
+function readFlowSettings(element, warn, { allowRelations = true } = {}) {
+  const flow = element.hasAttribute("fs-flow");
+  const settings = {
+    flow,
+    flowEnterWith: null,
+    flowExitWith: null
+  };
+  for (const [attribute, key] of [
+    ["fs-flow-enter", "flowEnterWith"],
+    ["fs-flow-exit", "flowExitWith"]
+  ]) {
+    const value = element.getAttribute(attribute)?.trim().toLowerCase() || null;
+    if (!value) continue;
+    if (!flow) {
+      warn(`[${attribute}]\uC740 fs-flow\uAC00 \uBD99\uC740 \uC694\uC18C\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
+      continue;
+    }
+    if (!allowRelations) {
+      warn(`${attribute}\uC740 fs-horizon\uC758 \uC9C1\uACC4 fs-flow \uC2AC\uB77C\uC774\uB4DC\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
+      continue;
+    }
+    if (!FLOW_RELATIONS.has(value)) {
+      warn(`${attribute}\uC5D0\uB294 prev \uB610\uB294 next\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
+      continue;
+    }
+    settings[key] = value;
+  }
+  return settings;
+}
 function scanRoutes(root, warn) {
   const pages = getDirectPages(root);
   const routes = [];
@@ -177,7 +326,7 @@ function scanRoutes(root, warn) {
   pages.forEach((page, pageIndex) => {
     const nestedHorizon = page.querySelector("[fs-horizon]");
     if (nestedHorizon && nestedHorizon !== page) {
-      throw new Error("[FullScroll] fs-horizon \uC911\uCCA9\uC740 1.0.0\uC5D0\uC11C \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
+      throw new Error("[FullScroll] fs-horizon \uC911\uCCA9\uC740 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
     }
     let anchor = page.getAttribute("fs-anchor")?.trim() || null;
     if (anchor) {
@@ -190,17 +339,24 @@ function scanRoutes(root, warn) {
     }
     const slides = page.hasAttribute("fs-horizon") ? getDirectElements(page) : [];
     const isHorizon = slides.length >= 2;
+    if (page.hasAttribute("fs-flow") && isHorizon) {
+      warn(
+        "fs-flow\uB294 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+      );
+    }
     if (page.hasAttribute("fs-horizon") && !isHorizon) {
       warn(`\uAC00\uB85C \uADF8\uB8F9 ${pageIndex + 1}\uC5D0 \uC2AC\uB77C\uC774\uB4DC\uAC00 2\uAC1C \uC774\uC0C1 \uD544\uC694\uD569\uB2C8\uB2E4.`);
     }
     if (!isHorizon) {
+      const flow = readFlowSettings(page, warn, { allowRelations: false });
       routes.push({
         index: routes.length,
         page,
         pageIndex,
         slide: null,
         slideIndex: null,
-        anchor
+        anchor,
+        ...flow
       });
       return;
     }
@@ -213,13 +369,15 @@ function scanRoutes(root, warn) {
       nav: null
     });
     slides.forEach((slide, slideIndex) => {
+      const flow = readFlowSettings(slide, warn);
       routes.push({
         index: routes.length,
         page,
         pageIndex,
         slide,
         slideIndex,
-        anchor
+        anchor,
+        ...flow
       });
     });
   });
@@ -255,7 +413,115 @@ function toPublicRoute(route) {
     slideIndex: route.slideIndex,
     anchor: route.anchor,
     page: route.page,
-    slide: route.slide
+    slide: route.slide,
+    flow: route.flow,
+    flowEnterWith: route.flowEnterWith,
+    flowExitWith: route.flowExitWith
+  });
+}
+
+// src/flow.js
+function readSlideMetrics(horizon, slideIndex) {
+  const slide = horizon?.slides?.[slideIndex] ?? null;
+  const swiper = horizon?.swiper;
+  if (!slide || !swiper) return null;
+  const gridStart = Number(swiper.slidesGrid?.[slideIndex]);
+  const gridSize = Number(swiper.slidesSizesGrid?.[slideIndex]);
+  const start = Number.isFinite(gridStart) ? gridStart : slide.offsetLeft;
+  const size = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : slide.offsetWidth;
+  return { slide, start, size };
+}
+function resolveFlowView({ horizon, origin, destination, currentIndex, nextIndex }) {
+  if (!horizon?.swiper || origin.pageIndex !== destination.pageIndex || origin.slideIndex === null || destination.slideIndex === null || Math.abs(nextIndex - currentIndex) !== 1) {
+    return null;
+  }
+  const movingForward = nextIndex > currentIndex;
+  const destinationRelation = destination.flow ? destination.flowEnterWith : null;
+  const originRelation = origin.flow ? origin.flowExitWith : null;
+  const destinationCompanionIndex = destinationRelation ? destination.slideIndex + (destinationRelation === "prev" ? -1 : 1) : null;
+  const originCompanionIndex = originRelation ? origin.slideIndex + (originRelation === "prev" ? -1 : 1) : null;
+  const canUseDestinationRelation = destinationRelation && (movingForward || destinationCompanionIndex === origin.slideIndex);
+  const canUseOriginRelation = originRelation && originCompanionIndex === destination.slideIndex;
+  const relation = canUseDestinationRelation ? destinationRelation : canUseOriginRelation ? originRelation : null;
+  if (!relation) return null;
+  const flowRoute = canUseDestinationRelation ? destination : origin;
+  const metrics = readSlideMetrics(horizon, flowRoute.slideIndex);
+  const companionIndex = flowRoute.slideIndex + (relation === "prev" ? -1 : 1);
+  const companion = horizon.slides[companionIndex] ?? null;
+  const viewportSize = horizon.page.clientWidth || horizon.swiper.width || 0;
+  if (!metrics || !viewportSize || !metrics.size || !companion) return null;
+  const rawOffset = relation === "prev" ? metrics.start + metrics.size - viewportSize : metrics.start;
+  const maxTranslate = Number(horizon.swiper.maxTranslate?.());
+  const lastMetrics = readSlideMetrics(horizon, horizon.slides.length - 1);
+  const maximum = Number.isFinite(maxTranslate) ? Math.max(0, -maxTranslate) : lastMetrics ? Math.max(0, lastMetrics.start + lastMetrics.size - viewportSize) : 0;
+  return {
+    offset: clamp(rawOffset, 0, maximum),
+    pageIndex: horizon.pageIndex,
+    flowSlide: metrics.slide,
+    companion
+  };
+}
+
+// src/scroll.js
+var SCROLLABLE_OVERFLOW = /^(auto|scroll|overlay)$/;
+function asElement(target) {
+  if (target instanceof Element) return target;
+  return target?.parentElement ?? null;
+}
+function getScrollPosition(element) {
+  if (!element) return null;
+  const maximum = Math.max(0, element.scrollHeight - element.clientHeight);
+  return clamp(element.scrollTop, 0, maximum);
+}
+function canScroll(element, direction) {
+  if (!element || element.scrollHeight <= element.clientHeight + 1) {
+    return false;
+  }
+  if (direction > 0) {
+    return getScrollPosition(element) + element.clientHeight < element.scrollHeight - 1;
+  }
+  return getScrollPosition(element) > 1;
+}
+function isScrollArea(element) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.hasAttribute("fs-scroll")) return true;
+  const style = window.getComputedStyle?.(element);
+  const overflowY = style?.overflowY || style?.overflow || "";
+  return SCROLLABLE_OVERFLOW.test(overflowY) && element.scrollHeight > element.clientHeight + 1;
+}
+function getScrollAreas(root, target) {
+  const areas = [];
+  let element = asElement(target);
+  while (element && element !== root) {
+    if (isScrollArea(element)) {
+      areas.push(element);
+    }
+    element = element.parentElement;
+  }
+  return areas;
+}
+function canAnyScroll(areas, direction) {
+  return areas.some((area) => canScroll(area, direction));
+}
+function captureScrollGesture(areas) {
+  return areas.map((area) => [area, getScrollPosition(area)]);
+}
+function scrollGestureWasConsumed(snapshot) {
+  return snapshot.some(
+    ([area, position]) => position !== null && Math.abs(getScrollPosition(area) - position) > 1
+  );
+}
+function resetRouteScroll(route) {
+  const container = route?.slide ?? route?.page;
+  if (!container) return;
+  const resetAreas = [];
+  if (container.hasAttribute("fs-scroll-reset")) {
+    resetAreas.push(container);
+  }
+  resetAreas.push(...container.querySelectorAll("[fs-scroll-reset]"));
+  resetAreas.forEach((area) => {
+    area.scrollTop = 0;
+    area.scrollLeft = 0;
   });
 }
 
@@ -295,6 +561,7 @@ var FullScroll = class {
     this.manualDisabled = false;
     this.moving = false;
     this.runtime = null;
+    this.controls = null;
     this.snapshots = /* @__PURE__ */ new Map();
     this.generatedNodes = [];
     this.readyOnce = false;
@@ -308,6 +575,10 @@ var FullScroll = class {
     this.resizeTimer = 0;
     this.pointer = null;
     this.touch = null;
+    this.pendingLocationIndex = null;
+    this.locationSyncing = false;
+    this.flowView = null;
+    this.transitionVersion = 0;
     this.onWheel = this.onWheel.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
     this.onPointerDown = this.onPointerDown.bind(this);
@@ -318,19 +589,23 @@ var FullScroll = class {
     this.onTouchCancel = this.onTouchCancel.bind(this);
     this.onResize = this.onResize.bind(this);
     this.onLocationChange = this.onLocationChange.bind(this);
+    this.onPageShow = this.onPageShow.bind(this);
     this.captureSnapshots();
     this.scan();
+    this.setupControls();
     const locationIndex = this.routeIndexFromLocation();
     this.currentIndex = locationIndex ?? 0;
     window.addEventListener("resize", this.onResize, { passive: true });
     window.addEventListener("orientationchange", this.onResize, { passive: true });
     window.addEventListener("popstate", this.onLocationChange);
     window.addEventListener("hashchange", this.onLocationChange);
+    window.addEventListener("pageshow", this.onPageShow);
     INSTANCES.set(root, this);
     if (this.shouldUseResponsiveMode()) {
       this.responsive = true;
       this.root.setAttribute("fs-responsive", "");
       this.scrollResponsiveTargetIntoView(false);
+      this.syncControls();
     } else {
       this.enableRuntime({ rescan: false });
     }
@@ -367,6 +642,27 @@ var FullScroll = class {
     this.anchorMap = structure.anchorMap;
     this.horizons = structure.horizons;
   }
+  setupControls() {
+    this.controls?.destroy();
+    this.controls = createControls({
+      isActive: () => this.active && !this.responsive && !this.manualDisabled,
+      resolveRoute: (reference) => {
+        const hash = reference.startsWith("#") ? reference : `#${reference}`;
+        return routeIndexFromHash(hash, this.anchorMap, this.routes);
+      },
+      onPrev: () => this.prev({ trigger: "control" }),
+      onNext: () => this.next({ trigger: "control" }),
+      onMove: (routeIndex) => this.goToRoute(routeIndex, { trigger: "control" }),
+      warn: (message) => this.warn(message)
+    });
+  }
+  syncControls() {
+    this.controls?.sync({
+      active: this.active && !this.responsive && !this.manualDisabled,
+      currentIndex: this.currentIndex,
+      total: this.routes.length
+    });
+  }
   enableRuntime({ rescan = true } = {}) {
     if (this.destroyed || this.active || this.manualDisabled) {
       return;
@@ -398,6 +694,7 @@ var FullScroll = class {
     this.root.style.setProperty("--fs-speed", `${this.options.speed}ms`);
     this.root.style.setProperty("--fs-easing", this.options.easing);
     this.root.setAttribute("fs-ready", "");
+    const hasFlowPage = this.pages.some((page) => page.hasAttribute("fs-flow"));
     try {
       for (const horizon of this.horizons.values()) {
         const wrapper = document.createElement("div");
@@ -413,11 +710,13 @@ var FullScroll = class {
           wrapper.append(slide);
         });
         horizon.page.classList.add("swiper", "fs-horizon-runtime");
+        const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute("fs-flow"));
         const initialSlide = currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null ? currentRoute.slideIndex : 0;
         horizon.swiper = new this.Swiper(horizon.page, {
           ...this.options.horizontalSwiper,
           direction: "horizontal",
-          slidesPerView: 1,
+          slidesPerView: hasFlowSlide ? "auto" : 1,
+          ...hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
           initialSlide,
           speed: this.options.speed,
           allowTouchMove: false,
@@ -433,7 +732,8 @@ var FullScroll = class {
       this.rootSwiper = new this.Swiper(this.root, {
         ...this.options.verticalSwiper,
         direction: "vertical",
-        slidesPerView: 1,
+        slidesPerView: hasFlowPage ? "auto" : 1,
+        ...hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
         initialSlide: currentRoute.pageIndex,
         speed: this.options.speed,
         allowTouchMove: false,
@@ -457,6 +757,7 @@ var FullScroll = class {
     }
   }
   teardownRuntime() {
+    this.transitionVersion += 1;
     if (!this.runtime) {
       return;
     }
@@ -505,7 +806,9 @@ var FullScroll = class {
     this.runtime = null;
     this.active = false;
     this.moving = false;
+    this.flowView = null;
     this.pointer = null;
+    this.touch = null;
   }
   installRuntimeListeners() {
     this.root.addEventListener("wheel", this.onWheel, { passive: false });
@@ -543,6 +846,7 @@ var FullScroll = class {
       if (updateHistory) {
         this.writeHistory(this.routes[nextIndex]);
       }
+      this.syncControls();
       return true;
     }
     const origin = this.routes[this.currentIndex];
@@ -554,7 +858,11 @@ var FullScroll = class {
       direction,
       trigger
     };
+    const transitionVersion = this.transitionVersion;
     if (!this.emit("beforechange", detail, true)) {
+      return false;
+    }
+    if (this.destroyed || !this.active || transitionVersion !== this.transitionVersion) {
       return false;
     }
     this.moving = true;
@@ -564,16 +872,34 @@ var FullScroll = class {
     try {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
-        await this.transitionTo(horizon.swiper, destination.slideIndex, duration);
+        const flowView = resolveFlowView({
+          horizon,
+          origin,
+          destination,
+          currentIndex: this.currentIndex,
+          nextIndex
+        });
+        await this.transitionTo(
+          horizon.swiper,
+          destination.slideIndex,
+          duration,
+          flowView?.offset ?? null
+        );
+        this.flowView = flowView;
       } else {
+        this.flowView = null;
         if (destination.slideIndex !== null) {
           const horizon = this.horizons.get(destination.pageIndex);
           horizon.swiper.slideTo(destination.slideIndex, 0, false);
         }
         await this.transitionTo(this.rootSwiper, destination.pageIndex, duration);
       }
+      if (this.destroyed || !this.active || transitionVersion !== this.transitionVersion) {
+        return false;
+      }
       this.currentIndex = nextIndex;
       this.syncState();
+      resetRouteScroll(origin);
       if (updateHistory) {
         this.writeHistory(destination);
       }
@@ -584,11 +910,16 @@ var FullScroll = class {
       this.root.removeAttribute("fs-moving");
       this.root.removeAttribute("fs-direction");
       this.scheduleWheelUnlock();
+      this.flushLocationChange();
     }
   }
-  transitionTo(swiper, index, duration) {
+  transitionTo(swiper, index, duration, flowOffset = null) {
     if (!swiper) {
       return Promise.resolve();
+    }
+    if (flowOffset !== null && typeof swiper.translateTo === "function") {
+      swiper.slideTo(index, 0, false);
+      return this.transitionToTranslate(swiper, flowOffset, duration);
     }
     if (duration === 0 || swiper.activeIndex === index) {
       swiper.slideTo(index, 0, false);
@@ -606,6 +937,26 @@ var FullScroll = class {
       const fallback = setTimeout(finish, duration + 180);
       swiper.once?.("transitionEnd", finish);
       swiper.slideTo(index, duration, true);
+    });
+  }
+  transitionToTranslate(swiper, offset, duration) {
+    const translate = -offset;
+    if (duration === 0) {
+      swiper.translateTo(translate, 0, false, false);
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(fallback);
+        swiper.off?.("transitionEnd", finish);
+        resolve();
+      };
+      const fallback = setTimeout(finish, duration + 180);
+      swiper.once?.("transitionEnd", finish);
+      swiper.translateTo(translate, duration, true, false);
     });
   }
   next(options = {}) {
@@ -639,15 +990,18 @@ var FullScroll = class {
       return;
     }
     const now = performance.now();
-    const scrollArea = closestWithin(this.root, event.target, "[fs-scroll]");
-    if (scrollArea && canScroll(scrollArea, direction)) {
+    if (closestWithin(this.root, event.target, WHEEL_INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    const scrollAreas = getScrollAreas(this.root, event.target);
+    if (canAnyScroll(scrollAreas, direction)) {
       this.lastNativeScrollAt = now;
       this.wheelAccumulator = 0;
       return;
     }
     event.preventDefault();
     this.lastWheelAt = now;
-    if (scrollArea && now - this.lastNativeScrollAt < this.options.wheelIdle) {
+    if (scrollAreas.length > 0 && now - this.lastNativeScrollAt < this.options.wheelIdle) {
       return;
     }
     if (this.wheelGestureLocked || this.moving) {
@@ -736,14 +1090,14 @@ var FullScroll = class {
     if (!this.active || event.pointerType === "mouse" || event.pointerType === "touch" || !event.isPrimary || closestWithin(this.root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
       return;
     }
-    const scrollArea = closestWithin(this.root, event.target, "[fs-scroll]");
+    const scrollAreas = getScrollAreas(this.root, event.target);
     this.pointer = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       target: event.target,
-      scrollArea,
-      scrollTop: getScrollPosition(scrollArea)
+      scrollAreas,
+      scrollSnapshot: captureScrollGesture(scrollAreas)
     };
   }
   onPointerUp(event) {
@@ -764,14 +1118,14 @@ var FullScroll = class {
     }
     const point = event.changedTouches[0];
     if (!point) return;
-    const scrollArea = closestWithin(this.root, event.target, "[fs-scroll]");
+    const scrollAreas = getScrollAreas(this.root, event.target);
     this.touch = {
       id: point.identifier,
       x: point.clientX,
       y: point.clientY,
       target: event.target,
-      scrollArea,
-      scrollTop: getScrollPosition(scrollArea)
+      scrollAreas,
+      scrollSnapshot: captureScrollGesture(scrollAreas)
     };
   }
   onTouchEnd(event) {
@@ -792,9 +1146,8 @@ var FullScroll = class {
     const result = readGesture(gesture, clientX, clientY, this.options.touchThreshold);
     if (!result) return;
     const { direction, vertical: verticalGesture } = result;
-    if (verticalGesture && gesture.scrollArea) {
-      const consumedByInnerScroll = gesture.scrollTop !== null && Math.abs(getScrollPosition(gesture.scrollArea) - gesture.scrollTop) > 1;
-      if (consumedByInnerScroll || canScroll(gesture.scrollArea, direction)) {
+    if (verticalGesture && gesture.scrollAreas.length > 0) {
+      if (scrollGestureWasConsumed(gesture.scrollSnapshot) || canAnyScroll(gesture.scrollAreas, direction)) {
         return;
       }
     }
@@ -830,6 +1183,7 @@ var FullScroll = class {
     this.responsive = true;
     this.root.setAttribute("fs-responsive", "");
     this.scrollResponsiveTargetIntoView(false);
+    this.syncControls();
     this.emit("responsive", { responsive: true });
   }
   enableFromResponsive() {
@@ -837,6 +1191,7 @@ var FullScroll = class {
     this.responsive = false;
     this.root.removeAttribute("fs-responsive");
     this.enableRuntime();
+    this.syncControls();
     this.emit("responsive", { responsive: false });
   }
   closestRouteToViewport() {
@@ -859,14 +1214,34 @@ var FullScroll = class {
   }
   onLocationChange() {
     const routeIndex = this.routeIndexFromLocation() ?? (window.location.hash ? null : 0);
-    if (routeIndex === null || routeIndex === this.currentIndex) {
-      return;
+    if (routeIndex === null) return;
+    this.pendingLocationIndex = routeIndex;
+    this.flushLocationChange();
+  }
+  async flushLocationChange() {
+    if (this.destroyed || this.locationSyncing || this.moving) return;
+    this.locationSyncing = true;
+    try {
+      while (this.pendingLocationIndex !== null) {
+        const routeIndex = this.pendingLocationIndex;
+        this.pendingLocationIndex = null;
+        if (routeIndex === this.currentIndex) continue;
+        await this.goToRoute(routeIndex, {
+          trigger: "history",
+          updateHistory: false,
+          instant: !this.active
+        });
+      }
+    } finally {
+      this.locationSyncing = false;
+      if (this.pendingLocationIndex !== null && !this.moving) {
+        queueMicrotask(() => this.flushLocationChange());
+      }
     }
-    this.goToRoute(routeIndex, {
-      trigger: "history",
-      updateHistory: false,
-      instant: !this.active
-    });
+  }
+  onPageShow() {
+    this.onLocationChange();
+    this.onResize();
   }
   routeIndexFromLocation() {
     return routeIndexFromHash(window.location.hash, this.anchorMap, this.routes);
@@ -908,7 +1283,36 @@ var FullScroll = class {
     const viewName = route.anchor ?? String(route.pageIndex + 1);
     const view = route.slideIndex === null ? viewName : `${viewName}/${route.slideIndex + 1}`;
     this.root.setAttribute("fs-view", view);
+    this.syncAccessibility(route);
     syncNavigation(this.root, this.horizons, route);
+    this.syncControls();
+  }
+  syncAccessibility(route) {
+    const visibleSlides = /* @__PURE__ */ new Set([route.slide]);
+    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.companion) {
+      visibleSlides.add(this.flowView.companion);
+    }
+    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.flowSlide) {
+      visibleSlides.add(this.flowView.flowSlide);
+    }
+    const viewport = this.root.getBoundingClientRect?.();
+    const hasViewport = Boolean(viewport?.height);
+    for (const page of this.pages) {
+      const bounds = page.getBoundingClientRect?.();
+      const intersectsViewport = hasViewport && route.flow && bounds && bounds.bottom > viewport.top + 1 && bounds.top < viewport.bottom - 1;
+      this.setRuntimeInert(page, page !== route.page && !intersectsViewport);
+    }
+    for (const horizon of this.horizons.values()) {
+      for (const slide of horizon.slides) {
+        const inactive = horizon.page !== route.page || !visibleSlides.has(slide);
+        this.setRuntimeInert(slide, inactive);
+      }
+    }
+  }
+  setRuntimeInert(element, inactive) {
+    const original = this.snapshots.get(element)?.some(([name]) => name === "inert");
+    if (inactive || original) element.setAttribute("inert", "");
+    else element.removeAttribute("inert");
   }
   publicRoute(route) {
     return toPublicRoute(route);
@@ -934,6 +1338,7 @@ var FullScroll = class {
     this.manualDisabled = true;
     this.teardownRuntime();
     this.root.setAttribute("fs-disabled", "");
+    this.syncControls();
   }
   enable() {
     if (this.destroyed || !this.manualDisabled) return;
@@ -942,6 +1347,8 @@ var FullScroll = class {
     if (this.shouldUseResponsiveMode()) {
       this.responsive = true;
       this.root.setAttribute("fs-responsive", "");
+      this.scrollResponsiveTargetIntoView(false);
+      this.syncControls();
     } else {
       this.enableRuntime();
     }
@@ -950,11 +1357,16 @@ var FullScroll = class {
     if (this.destroyed) return;
     const wasActive = this.active;
     if (wasActive) this.teardownRuntime();
+    this.controls?.destroy();
+    this.controls = null;
     this.captureSnapshots();
     this.scan();
+    this.setupControls();
     this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
     if (wasActive && !this.shouldUseResponsiveMode() && !this.manualDisabled) {
       this.enableRuntime();
+    } else {
+      this.syncControls();
     }
   }
   destroy() {
@@ -967,8 +1379,11 @@ var FullScroll = class {
     window.removeEventListener("orientationchange", this.onResize);
     window.removeEventListener("popstate", this.onLocationChange);
     window.removeEventListener("hashchange", this.onLocationChange);
+    window.removeEventListener("pageshow", this.onPageShow);
     this.root.removeAttribute("fs-responsive");
     this.root.removeAttribute("fs-disabled");
+    this.controls?.destroy();
+    this.controls = null;
     this.destroyed = true;
     INSTANCES.delete(this.root);
     this.emit("destroy", {});

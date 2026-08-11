@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll fs-flow 데모</title>
+    <link rel="stylesheet" href="../../node_modules/swiper/swiper-bundle.min.css">
+    <link rel="stylesheet" href="../../dist/fullscroll.css">
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #111827; color: #fff; font-family: system-ui, sans-serif; }
+      .page, .slide { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 10vw; text-align: center; }
+      .page h1, .page h2, .slide h2 { margin: 0; font-size: clamp(42px, 7vw, 90px); letter-spacing: -0.06em; }
+      .page p, .slide p { max-width: 620px; margin: 20px auto 0; font-size: 18px; line-height: 1.6; }
+      .one { background: #6258e6; }
+      .three { background: #218c76; }
+      .four { background: #233047; }
+      .six { background: #e7edf6; color: #121827; }
+      .compact { display: flex; min-height: 0; align-items: center; justify-content: center; padding: 28px; color: #121827; background: #f5d76e; }
+      .compact-card { width: max-content; max-width: min(75vw, 560px); padding: 28px; border: 1px solid rgb(0 0 0 / 20%); border-radius: 24px; }
+      .compact-card h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); letter-spacing: -0.06em; }
+      .compact-card p { margin-bottom: 0; color: rgb(18 24 39 / 68%); }
+      [fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide[fs-flow] { min-height: 0; }
+      [fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .swiper-slide[fs-flow] { padding: 8vw; }
+      .notice { position: fixed; top: 16px; left: 50%; z-index: 20; margin: 0; padding: 8px 14px; border-radius: 999px; background: rgb(0 0 0 / 30%); font-size: 13px; transform: translateX(-50%); }
+    </style>
+  </head>
+  <body>
+    <p class="notice" fs-ignore><output fs-current>1</output> / <output fs-total>10</output> · fs-flow</p>
+    <main fs>
+      <section class="page one"><div><h1>기본 Fullpage</h1><p>다음은 자연 높이 예외입니다.</p></div></section>
+      <section fs-flow class="compact"><div class="compact-card"><h2>세로 자연 높이</h2><p>콘텐츠 크기만큼만 차지하는 예외 섹션입니다.</p></div></section>
+      <section class="page three"><div><h2>다음 Fullpage</h2><p>자연 높이 섹션과 인접해서 보일 수 있습니다.</p></div></section>
+      <section fs-horizon aria-label="가변 너비 가로 그룹">
+        <article class="slide one"><h2>1 · 전체 너비</h2></article>
+        <article fs-flow fs-flow-enter="prev" fs-flow-exit="next" class="compact"><div class="compact-card"><h2>2 · 자연 너비</h2><p>1과 함께 들어오고 3과 함께 나갑니다.</p></div></article>
+        <article class="slide three"><h2>3 · 전체 너비</h2></article>
+        <article class="slide four"><h2>4 · 전체 너비</h2></article>
+        <article fs-flow fs-flow-enter="next" class="compact"><div class="compact-card"><h2>5 · 자연 너비</h2><p>4에서 들어올 때 6과 함께 보입니다.</p></div></article>
+        <article class="slide six"><h2>6 · 기본 이동</h2></article>
+      </section>
+      <section class="page three"><div><h2>완료</h2><p>5에서 6은 일반 슬라이드로 이동합니다.</p></div></section>
+    </main>
+    <script src="../../node_modules/swiper/swiper-bundle.min.js"></script>
+    <script src="../../dist/fullscroll.js"></script>
+    <script>window.fullscrollFlowDemo = new FullScroll('[fs]', { Swiper, speed: 520, history: true });</script>
+  </body>
+</html>

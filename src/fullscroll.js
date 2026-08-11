@@ -1,16 +1,28 @@
-import { createOptions, INTERACTIVE_SELECTOR, VERSION } from './config.js';
 import {
-  canScroll,
+  createOptions,
+  INTERACTIVE_SELECTOR,
+  VERSION,
+  WHEEL_INTERACTIVE_SELECTOR,
+} from './config.js';
+import { createControls } from './controls.js';
+import {
   captureAttributes,
   clamp,
   closestWithin,
-  getScrollPosition,
   resolveElement,
   restoreAttributes,
 } from './dom.js';
 import { normalizeWheelDelta, readGesture } from './gestures.js';
 import { createNavigation, syncNavigation } from './navigation.js';
 import { hashForRoute, routeIndexFromHash, scanRoutes, toPublicRoute } from './routes.js';
+import { resolveFlowView } from './flow.js';
+import {
+  canAnyScroll,
+  captureScrollGesture,
+  getScrollAreas,
+  resetRouteScroll,
+  scrollGestureWasConsumed,
+} from './scroll.js';
 
 const INSTANCES = new WeakMap();
 
@@ -60,6 +72,7 @@ export default class FullScroll {
     this.manualDisabled = false;
     this.moving = false;
     this.runtime = null;
+    this.controls = null;
     this.snapshots = new Map();
     this.generatedNodes = [];
     this.readyOnce = false;
@@ -74,6 +87,10 @@ export default class FullScroll {
     this.resizeTimer = 0;
     this.pointer = null;
     this.touch = null;
+    this.pendingLocationIndex = null;
+    this.locationSyncing = false;
+    this.flowView = null;
+    this.transitionVersion = 0;
 
     this.onWheel = this.onWheel.bind(this);
     this.onKeyDown = this.onKeyDown.bind(this);
@@ -85,9 +102,11 @@ export default class FullScroll {
     this.onTouchCancel = this.onTouchCancel.bind(this);
     this.onResize = this.onResize.bind(this);
     this.onLocationChange = this.onLocationChange.bind(this);
+    this.onPageShow = this.onPageShow.bind(this);
 
     this.captureSnapshots();
     this.scan();
+    this.setupControls();
 
     const locationIndex = this.routeIndexFromLocation();
     this.currentIndex = locationIndex ?? 0;
@@ -96,6 +115,7 @@ export default class FullScroll {
     window.addEventListener('orientationchange', this.onResize, { passive: true });
     window.addEventListener('popstate', this.onLocationChange);
     window.addEventListener('hashchange', this.onLocationChange);
+    window.addEventListener('pageshow', this.onPageShow);
 
     INSTANCES.set(root, this);
 
@@ -103,6 +123,7 @@ export default class FullScroll {
       this.responsive = true;
       this.root.setAttribute('fs-responsive', '');
       this.scrollResponsiveTargetIntoView(false);
+      this.syncControls();
     } else {
       this.enableRuntime({ rescan: false });
     }
@@ -145,6 +166,29 @@ export default class FullScroll {
     this.horizons = structure.horizons;
   }
 
+  setupControls() {
+    this.controls?.destroy();
+    this.controls = createControls({
+      isActive: () => this.active && !this.responsive && !this.manualDisabled,
+      resolveRoute: (reference) => {
+        const hash = reference.startsWith('#') ? reference : `#${reference}`;
+        return routeIndexFromHash(hash, this.anchorMap, this.routes);
+      },
+      onPrev: () => this.prev({ trigger: 'control' }),
+      onNext: () => this.next({ trigger: 'control' }),
+      onMove: (routeIndex) => this.goToRoute(routeIndex, { trigger: 'control' }),
+      warn: (message) => this.warn(message),
+    });
+  }
+
+  syncControls() {
+    this.controls?.sync({
+      active: this.active && !this.responsive && !this.manualDisabled,
+      currentIndex: this.currentIndex,
+      total: this.routes.length,
+    });
+  }
+
   enableRuntime({ rescan = true } = {}) {
     if (this.destroyed || this.active || this.manualDisabled) {
       return;
@@ -182,6 +226,8 @@ export default class FullScroll {
     this.root.style.setProperty('--fs-easing', this.options.easing);
     this.root.setAttribute('fs-ready', '');
 
+    const hasFlowPage = this.pages.some((page) => page.hasAttribute('fs-flow'));
+
     try {
       for (const horizon of this.horizons.values()) {
         const wrapper = document.createElement('div');
@@ -199,6 +245,7 @@ export default class FullScroll {
         });
 
         horizon.page.classList.add('swiper', 'fs-horizon-runtime');
+        const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute('fs-flow'));
         const initialSlide =
           currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null
             ? currentRoute.slideIndex
@@ -207,7 +254,8 @@ export default class FullScroll {
         horizon.swiper = new this.Swiper(horizon.page, {
           ...this.options.horizontalSwiper,
           direction: 'horizontal',
-          slidesPerView: 1,
+          slidesPerView: hasFlowSlide ? 'auto' : 1,
+          ...(hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {}),
           initialSlide,
           speed: this.options.speed,
           allowTouchMove: false,
@@ -225,7 +273,8 @@ export default class FullScroll {
       this.rootSwiper = new this.Swiper(this.root, {
         ...this.options.verticalSwiper,
         direction: 'vertical',
-        slidesPerView: 1,
+        slidesPerView: hasFlowPage ? 'auto' : 1,
+        ...(hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {}),
         initialSlide: currentRoute.pageIndex,
         speed: this.options.speed,
         allowTouchMove: false,
@@ -252,6 +301,7 @@ export default class FullScroll {
   }
 
   teardownRuntime() {
+    this.transitionVersion += 1;
     if (!this.runtime) {
       return;
     }
@@ -308,7 +358,9 @@ export default class FullScroll {
     this.runtime = null;
     this.active = false;
     this.moving = false;
+    this.flowView = null;
     this.pointer = null;
+    this.touch = null;
   }
 
   installRuntimeListeners() {
@@ -351,6 +403,7 @@ export default class FullScroll {
       if (updateHistory) {
         this.writeHistory(this.routes[nextIndex]);
       }
+      this.syncControls();
       return true;
     }
 
@@ -364,7 +417,12 @@ export default class FullScroll {
       trigger,
     };
 
+    const transitionVersion = this.transitionVersion;
     if (!this.emit('beforechange', detail, true)) {
+      return false;
+    }
+
+    if (this.destroyed || !this.active || transitionVersion !== this.transitionVersion) {
       return false;
     }
 
@@ -377,8 +435,22 @@ export default class FullScroll {
     try {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
-        await this.transitionTo(horizon.swiper, destination.slideIndex, duration);
+        const flowView = resolveFlowView({
+          horizon,
+          origin,
+          destination,
+          currentIndex: this.currentIndex,
+          nextIndex,
+        });
+        await this.transitionTo(
+          horizon.swiper,
+          destination.slideIndex,
+          duration,
+          flowView?.offset ?? null,
+        );
+        this.flowView = flowView;
       } else {
+        this.flowView = null;
         if (destination.slideIndex !== null) {
           const horizon = this.horizons.get(destination.pageIndex);
           horizon.swiper.slideTo(destination.slideIndex, 0, false);
@@ -387,8 +459,13 @@ export default class FullScroll {
         await this.transitionTo(this.rootSwiper, destination.pageIndex, duration);
       }
 
+      if (this.destroyed || !this.active || transitionVersion !== this.transitionVersion) {
+        return false;
+      }
+
       this.currentIndex = nextIndex;
       this.syncState();
+      resetRouteScroll(origin);
       if (updateHistory) {
         this.writeHistory(destination);
       }
@@ -399,12 +476,18 @@ export default class FullScroll {
       this.root.removeAttribute('fs-moving');
       this.root.removeAttribute('fs-direction');
       this.scheduleWheelUnlock();
+      this.flushLocationChange();
     }
   }
 
-  transitionTo(swiper, index, duration) {
+  transitionTo(swiper, index, duration, flowOffset = null) {
     if (!swiper) {
       return Promise.resolve();
+    }
+
+    if (flowOffset !== null && typeof swiper.translateTo === 'function') {
+      swiper.slideTo(index, 0, false);
+      return this.transitionToTranslate(swiper, flowOffset, duration);
     }
 
     if (duration === 0 || swiper.activeIndex === index) {
@@ -425,6 +508,30 @@ export default class FullScroll {
 
       swiper.once?.('transitionEnd', finish);
       swiper.slideTo(index, duration, true);
+    });
+  }
+
+  transitionToTranslate(swiper, offset, duration) {
+    const translate = -offset;
+
+    if (duration === 0) {
+      swiper.translateTo(translate, 0, false, false);
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(fallback);
+        swiper.off?.('transitionEnd', finish);
+        resolve();
+      };
+      const fallback = setTimeout(finish, duration + 180);
+
+      swiper.once?.('transitionEnd', finish);
+      swiper.translateTo(translate, duration, true, false);
     });
   }
 
@@ -467,9 +574,13 @@ export default class FullScroll {
     }
 
     const now = performance.now();
-    const scrollArea = closestWithin(this.root, event.target, '[fs-scroll]');
+    if (closestWithin(this.root, event.target, WHEEL_INTERACTIVE_SELECTOR)) {
+      return;
+    }
 
-    if (scrollArea && canScroll(scrollArea, direction)) {
+    const scrollAreas = getScrollAreas(this.root, event.target);
+
+    if (canAnyScroll(scrollAreas, direction)) {
       this.lastNativeScrollAt = now;
       this.wheelAccumulator = 0;
       return;
@@ -478,7 +589,7 @@ export default class FullScroll {
     event.preventDefault();
     this.lastWheelAt = now;
 
-    if (scrollArea && now - this.lastNativeScrollAt < this.options.wheelIdle) {
+    if (scrollAreas.length > 0 && now - this.lastNativeScrollAt < this.options.wheelIdle) {
       return;
     }
 
@@ -598,14 +709,14 @@ export default class FullScroll {
       return;
     }
 
-    const scrollArea = closestWithin(this.root, event.target, '[fs-scroll]');
+    const scrollAreas = getScrollAreas(this.root, event.target);
     this.pointer = {
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
       target: event.target,
-      scrollArea,
-      scrollTop: getScrollPosition(scrollArea),
+      scrollAreas,
+      scrollSnapshot: captureScrollGesture(scrollAreas),
     };
   }
 
@@ -637,14 +748,14 @@ export default class FullScroll {
     const point = event.changedTouches[0];
     if (!point) return;
 
-    const scrollArea = closestWithin(this.root, event.target, '[fs-scroll]');
+    const scrollAreas = getScrollAreas(this.root, event.target);
     this.touch = {
       id: point.identifier,
       x: point.clientX,
       y: point.clientY,
       target: event.target,
-      scrollArea,
-      scrollTop: getScrollPosition(scrollArea),
+      scrollAreas,
+      scrollSnapshot: captureScrollGesture(scrollAreas),
     };
   }
 
@@ -672,12 +783,11 @@ export default class FullScroll {
 
     const { direction, vertical: verticalGesture } = result;
 
-    if (verticalGesture && gesture.scrollArea) {
-      const consumedByInnerScroll =
-        gesture.scrollTop !== null &&
-        Math.abs(getScrollPosition(gesture.scrollArea) - gesture.scrollTop) > 1;
-
-      if (consumedByInnerScroll || canScroll(gesture.scrollArea, direction)) {
+    if (verticalGesture && gesture.scrollAreas.length > 0) {
+      if (
+        scrollGestureWasConsumed(gesture.scrollSnapshot) ||
+        canAnyScroll(gesture.scrollAreas, direction)
+      ) {
         return;
       }
     }
@@ -718,6 +828,7 @@ export default class FullScroll {
     this.responsive = true;
     this.root.setAttribute('fs-responsive', '');
     this.scrollResponsiveTargetIntoView(false);
+    this.syncControls();
     this.emit('responsive', { responsive: true });
   }
 
@@ -726,6 +837,7 @@ export default class FullScroll {
     this.responsive = false;
     this.root.removeAttribute('fs-responsive');
     this.enableRuntime();
+    this.syncControls();
     this.emit('responsive', { responsive: false });
   }
 
@@ -753,15 +865,39 @@ export default class FullScroll {
 
   onLocationChange() {
     const routeIndex = this.routeIndexFromLocation() ?? (window.location.hash ? null : 0);
-    if (routeIndex === null || routeIndex === this.currentIndex) {
-      return;
-    }
+    if (routeIndex === null) return;
 
-    this.goToRoute(routeIndex, {
-      trigger: 'history',
-      updateHistory: false,
-      instant: !this.active,
-    });
+    this.pendingLocationIndex = routeIndex;
+    this.flushLocationChange();
+  }
+
+  async flushLocationChange() {
+    if (this.destroyed || this.locationSyncing || this.moving) return;
+
+    this.locationSyncing = true;
+    try {
+      while (this.pendingLocationIndex !== null) {
+        const routeIndex = this.pendingLocationIndex;
+        this.pendingLocationIndex = null;
+        if (routeIndex === this.currentIndex) continue;
+
+        await this.goToRoute(routeIndex, {
+          trigger: 'history',
+          updateHistory: false,
+          instant: !this.active,
+        });
+      }
+    } finally {
+      this.locationSyncing = false;
+      if (this.pendingLocationIndex !== null && !this.moving) {
+        queueMicrotask(() => this.flushLocationChange());
+      }
+    }
+  }
+
+  onPageShow() {
+    this.onLocationChange();
+    this.onResize();
   }
 
   routeIndexFromLocation() {
@@ -815,7 +951,49 @@ export default class FullScroll {
     const view = route.slideIndex === null ? viewName : `${viewName}/${route.slideIndex + 1}`;
     this.root.setAttribute('fs-view', view);
 
+    this.syncAccessibility(route);
     syncNavigation(this.root, this.horizons, route);
+    this.syncControls();
+  }
+
+  syncAccessibility(route) {
+    const visibleSlides = new Set([route.slide]);
+    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.companion) {
+      visibleSlides.add(this.flowView.companion);
+    }
+    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.flowSlide) {
+      visibleSlides.add(this.flowView.flowSlide);
+    }
+
+    const viewport = this.root.getBoundingClientRect?.();
+    const hasViewport = Boolean(viewport?.height);
+
+    for (const page of this.pages) {
+      const bounds = page.getBoundingClientRect?.();
+      const intersectsViewport =
+        hasViewport &&
+        route.flow &&
+        bounds &&
+        bounds.bottom > viewport.top + 1 &&
+        bounds.top < viewport.bottom - 1;
+      this.setRuntimeInert(page, page !== route.page && !intersectsViewport);
+    }
+
+    for (const horizon of this.horizons.values()) {
+      for (const slide of horizon.slides) {
+        const inactive = horizon.page !== route.page || !visibleSlides.has(slide);
+        this.setRuntimeInert(slide, inactive);
+      }
+    }
+  }
+
+  setRuntimeInert(element, inactive) {
+    const original = this.snapshots
+      .get(element)
+      ?.some(([name]) => name === 'inert');
+
+    if (inactive || original) element.setAttribute('inert', '');
+    else element.removeAttribute('inert');
   }
 
   publicRoute(route) {
@@ -846,6 +1024,7 @@ export default class FullScroll {
     this.manualDisabled = true;
     this.teardownRuntime();
     this.root.setAttribute('fs-disabled', '');
+    this.syncControls();
   }
 
   enable() {
@@ -856,6 +1035,8 @@ export default class FullScroll {
     if (this.shouldUseResponsiveMode()) {
       this.responsive = true;
       this.root.setAttribute('fs-responsive', '');
+      this.scrollResponsiveTargetIntoView(false);
+      this.syncControls();
     } else {
       this.enableRuntime();
     }
@@ -866,12 +1047,17 @@ export default class FullScroll {
     const wasActive = this.active;
     if (wasActive) this.teardownRuntime();
 
+    this.controls?.destroy();
+    this.controls = null;
     this.captureSnapshots();
     this.scan();
+    this.setupControls();
     this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
 
     if (wasActive && !this.shouldUseResponsiveMode() && !this.manualDisabled) {
       this.enableRuntime();
+    } else {
+      this.syncControls();
     }
   }
 
@@ -887,9 +1073,12 @@ export default class FullScroll {
     window.removeEventListener('orientationchange', this.onResize);
     window.removeEventListener('popstate', this.onLocationChange);
     window.removeEventListener('hashchange', this.onLocationChange);
+    window.removeEventListener('pageshow', this.onPageShow);
 
     this.root.removeAttribute('fs-responsive');
     this.root.removeAttribute('fs-disabled');
+    this.controls?.destroy();
+    this.controls = null;
     this.destroyed = true;
     INSTANCES.delete(this.root);
     this.emit('destroy', {});

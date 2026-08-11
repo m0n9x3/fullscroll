@@ -1,5 +1,43 @@
 import { clamp, getDirectElements, getDirectPages } from './dom.js';
 
+const FLOW_RELATIONS = new Set(['prev', 'next']);
+
+function readFlowSettings(element, warn, { allowRelations = true } = {}) {
+  const flow = element.hasAttribute('fs-flow');
+  const settings = {
+    flow,
+    flowEnterWith: null,
+    flowExitWith: null,
+  };
+
+  for (const [attribute, key] of [
+    ['fs-flow-enter', 'flowEnterWith'],
+    ['fs-flow-exit', 'flowExitWith'],
+  ]) {
+    const value = element.getAttribute(attribute)?.trim().toLowerCase() || null;
+    if (!value) continue;
+
+    if (!flow) {
+      warn(`[${attribute}]은 fs-flow가 붙은 요소에서만 사용할 수 있습니다.`);
+      continue;
+    }
+
+    if (!allowRelations) {
+      warn(`${attribute}은 fs-horizon의 직계 fs-flow 슬라이드에서만 사용할 수 있습니다.`);
+      continue;
+    }
+
+    if (!FLOW_RELATIONS.has(value)) {
+      warn(`${attribute}에는 prev 또는 next만 사용할 수 있습니다.`);
+      continue;
+    }
+
+    settings[key] = value;
+  }
+
+  return settings;
+}
+
 export function scanRoutes(root, warn) {
   const pages = getDirectPages(root);
   const routes = [];
@@ -13,7 +51,7 @@ export function scanRoutes(root, warn) {
   pages.forEach((page, pageIndex) => {
     const nestedHorizon = page.querySelector('[fs-horizon]');
     if (nestedHorizon && nestedHorizon !== page) {
-      throw new Error('[FullScroll] fs-horizon 중첩은 1.0.0에서 지원하지 않습니다.');
+      throw new Error('[FullScroll] fs-horizon 중첩은 지원하지 않습니다.');
     }
 
     let anchor = page.getAttribute('fs-anchor')?.trim() || null;
@@ -29,11 +67,18 @@ export function scanRoutes(root, warn) {
     const slides = page.hasAttribute('fs-horizon') ? getDirectElements(page) : [];
     const isHorizon = slides.length >= 2;
 
+    if (page.hasAttribute('fs-flow') && isHorizon) {
+      warn(
+        'fs-flow는 fs-horizon의 직계 슬라이드에 붙여야 합니다. 가로 그룹 자체에는 적용되지 않습니다.',
+      );
+    }
+
     if (page.hasAttribute('fs-horizon') && !isHorizon) {
       warn(`가로 그룹 ${pageIndex + 1}에 슬라이드가 2개 이상 필요합니다.`);
     }
 
     if (!isHorizon) {
+      const flow = readFlowSettings(page, warn, { allowRelations: false });
       routes.push({
         index: routes.length,
         page,
@@ -41,6 +86,7 @@ export function scanRoutes(root, warn) {
         slide: null,
         slideIndex: null,
         anchor,
+        ...flow,
       });
       return;
     }
@@ -55,6 +101,7 @@ export function scanRoutes(root, warn) {
     });
 
     slides.forEach((slide, slideIndex) => {
+      const flow = readFlowSettings(slide, warn);
       routes.push({
         index: routes.length,
         page,
@@ -62,6 +109,7 @@ export function scanRoutes(root, warn) {
         slide,
         slideIndex,
         anchor,
+        ...flow,
       });
     });
   });
@@ -107,5 +155,8 @@ export function toPublicRoute(route) {
     anchor: route.anchor,
     page: route.page,
     slide: route.slide,
+    flow: route.flow,
+    flowEnterWith: route.flowEnterWith,
+    flowExitWith: route.flowExitWith,
   });
 }

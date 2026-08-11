@@ -3,16 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>FullScroll 1.0.0 데모</title>
+    <title>FullScroll 1.3.0 데모</title>
     <link rel="stylesheet" href="../node_modules/swiper/swiper-bundle.min.css">
     <link rel="stylesheet" href="../dist/fullscroll.css">
     <link rel="stylesheet" href="./example.css">
   </head>
   <body>
+    <nav class="publisher-controls" aria-label="FullScroll 경로 이동">
+      <button type="button" fs-prev aria-label="이전 경로">←</button>
+      <span><output fs-current>1</output> / <output fs-total>8</output></span>
+      <progress fs-progress aria-label="전체 진행률"></progress>
+      <button type="button" fs-next aria-label="다음 경로">→</button>
+    </nav>
+
     <main fs>
-      <section fs-horizon fs-anchor="intro" aria-label="인트로 가로 그룹">
+      <section id="intro" fs-horizon fs-anchor="intro" aria-label="인트로 가로 그룹">
         <article class="panel panel-coral">
-          <p class="eyebrow">FullScroll 1.0.0</p>
+          <p class="eyebrow">FullScroll 1.3.0</p>
           <h1>가로와 세로를<br>하나의 흐름으로</h1>
           <p>아래로 휠을 한 번씩 움직여 보세요.</p>
         </article>
@@ -34,8 +41,8 @@
         <p>방향이 바뀌어도 사용자는 하나의 연속된 이야기로 느낍니다.</p>
       </section>
 
-      <section fs-anchor="scroll" class="panel panel-mint">
-        <div class="scroll-card" fs-scroll>
+      <section fs-anchor="scroll" fs-scroll fs-scroll-reset class="panel panel-mint panel-scroll">
+        <div class="scroll-card">
           <p class="eyebrow">04 · INNER SCROLL</p>
           <h2>내용을 먼저 읽고<br>끝에서 다음 장으로</h2>
           <p>이 카드 위에서 스크롤하면 내부 내용이 우선 움직입니다.</p>
@@ -62,9 +69,9 @@
         </article>
         <article class="panel panel-black">
           <p class="eyebrow">07 · API</p>
-          <h2>FullScroll 1.0.0</h2>
+          <h2>FullScroll 1.3.0</h2>
           <div class="actions" fs-ignore>
-            <button type="button" id="go-first">처음으로</button>
+            <a class="button" href="#intro" fs-move>처음으로</a>
             <output id="event-log" aria-live="polite">준비됨</output>
           </div>
         </article>
@@ -84,10 +91,6 @@
       root.addEventListener('fullscroll:change', (event) => {
         const destination = event.detail.destination;
         log.textContent = `현재 경로 ${destination.index + 1} / ${fullscroll.state.total}`;
-      });
-
-      document.querySelector('#go-first').addEventListener('click', () => {
-        fullscroll.moveTo('intro');
       });
 
       window.fullscrollDemo = fullscroll;

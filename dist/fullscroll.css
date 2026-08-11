@@ -5,14 +5,17 @@
   --fs-dot-color: rgba(255, 255, 255, 0.5);
   --fs-dot-active-color: #fff;
   --fs-dot-outline: #111;
+  --fs-viewport-offset-top: 0px;
+  --fs-viewport-offset-bottom: 0px;
 }
 [fs] {
   position: relative;
   width: 100%;
 }
 [fs][fs-ready] {
-  height: 100vh;
-  height: 100dvh;
+  height: calc(100vh - var(--fs-viewport-offset-top) - var(--fs-viewport-offset-bottom));
+  height: calc(100dvh - var(--fs-viewport-offset-top) - var(--fs-viewport-offset-bottom));
+  margin-block-start: var(--fs-viewport-offset-top);
   overflow: hidden;
   touch-action: none;
 }
@@ -23,15 +26,28 @@
   width: 100%;
   height: 100%;
 }
+[fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide[fs-flow] {
+  height: auto;
+  min-height: 0;
+  align-self: flex-start;
+}
+[fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .swiper-slide[fs-flow] {
+  width: max-content;
+  max-width: 100%;
+}
 [fs][fs-ready] .swiper-wrapper {
   transition-timing-function: var(--fs-easing, ease);
 }
 [fs] [fs-scroll] {
   max-height: 100%;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
+}
+[fs] [fs-scroll] [fs-scroll] {
+  overscroll-behavior-y: auto;
 }
 [fs][fs-responsive],
 [fs][fs-disabled] {
@@ -44,6 +60,12 @@
 [fs][fs-disabled] > [fs-page] {
   min-height: 100vh;
   min-height: 100dvh;
+}
+[fs][fs-responsive] > section[fs-flow],
+[fs][fs-responsive] > [fs-page][fs-flow],
+[fs][fs-disabled] > section[fs-flow],
+[fs][fs-disabled] > [fs-page][fs-flow] {
+  min-height: 0;
 }
 .fs-nav {
   position: absolute;

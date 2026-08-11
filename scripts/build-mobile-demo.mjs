@@ -6,10 +6,12 @@ const templateUrl = new URL('../examples/mobile/template.html', import.meta.url)
 const outputUrl = new URL('../examples/mobile/index.html', import.meta.url);
 const entryPath = fileURLToPath(new URL('../examples/mobile/entry.js', import.meta.url));
 const swiperCssUrl = new URL('../node_modules/swiper/swiper-bundle.min.css', import.meta.url);
+const fullscrollCssUrl = new URL('../src/fullscroll.css', import.meta.url);
 
-const [template, swiperCss, bundle] = await Promise.all([
+const [template, swiperCss, fullscrollCss, bundle] = await Promise.all([
   readFile(templateUrl, 'utf8'),
   readFile(swiperCssUrl, 'utf8'),
+  readFile(fullscrollCssUrl, 'utf8'),
   build({
     entryPoints: [entryPath],
     bundle: true,
@@ -28,7 +30,11 @@ if (!javascript) {
   throw new Error('모바일 데모 JavaScript 번들을 만들지 못했습니다.');
 }
 
-if (/<\/script/i.test(javascript) || /<\/style/i.test(swiperCss)) {
+if (
+  /<\/script/i.test(javascript) ||
+  /<\/style/i.test(swiperCss) ||
+  /<\/style/i.test(fullscrollCss)
+) {
   throw new Error('HTML에 안전하게 삽입할 수 없는 종료 태그가 번들에 포함되어 있습니다.');
 }
 
@@ -41,7 +47,10 @@ if (!template.includes(cssMarker) || !template.includes(scriptMarker)) {
 }
 
 const html = template
-  .replace(cssMarker, `<style data-bundle="swiper">${swiperCss}</style>`)
+  .replace(
+    cssMarker,
+    `<style data-bundle="swiper">${swiperCss}</style><style data-bundle="fullscroll">${fullscrollCss}</style>`,
+  )
   .replace(
     scriptMarker,
     `<script data-bundle="fullscroll">${javascript}</script>`,

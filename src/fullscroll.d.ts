@@ -1,3 +1,6 @@
+import type Swiper from 'swiper';
+import type { SwiperOptions } from 'swiper/types';
+
 export interface FullScrollRoute {
   readonly index: number;
   readonly pageIndex: number;
@@ -5,6 +8,9 @@ export interface FullScrollRoute {
   readonly anchor: string | null;
   readonly page: HTMLElement;
   readonly slide: HTMLElement | null;
+  readonly flow: boolean;
+  readonly flowEnterWith: 'prev' | 'next' | null;
+  readonly flowExitWith: 'prev' | 'next' | null;
 }
 
 export interface FullScrollState {
@@ -26,9 +32,9 @@ export interface FullScrollOptions {
   touchThreshold?: number;
   dots?: boolean;
   history?: boolean;
-  Swiper?: new (element: Element | string, options?: Record<string, unknown>) => unknown;
-  verticalSwiper?: Record<string, unknown>;
-  horizontalSwiper?: Record<string, unknown>;
+  Swiper?: typeof Swiper;
+  verticalSwiper?: SwiperOptions;
+  horizontalSwiper?: SwiperOptions;
 }
 
 export interface FullScrollMoveOptions {
@@ -39,11 +45,11 @@ export interface FullScrollMoveOptions {
 
 export default class FullScroll {
   static readonly version: string;
-  static get(target: string | Element): FullScroll | null;
+  static get(target: string | HTMLElement): FullScroll | null;
 
-  constructor(target: string | Element, options?: FullScrollOptions);
+  constructor(target: string | HTMLElement, options?: FullScrollOptions);
 
-  readonly root: Element;
+  readonly root: HTMLElement;
   readonly state: FullScrollState;
 
   next(options?: FullScrollMoveOptions): Promise<boolean>;

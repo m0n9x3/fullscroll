@@ -1,79 +1,92 @@
-# FullScroll 1.0.0 기능 체크리스트
+# FullScroll 1.3.0 기능 체크리스트
 
-이 문서는 현재 구현된 기능과 자동 검증 범위를 한눈에 확인하기 위한 기준표입니다. 상태는 `npm run check`를 통과한 소스와 배포 산출물을 기준으로 합니다.
+이 문서는 `npm run check`를 통과한 소스, 실제 Swiper 통합 테스트, 타입 검사와 배포 산출물을 기준으로 합니다.
 
 ## 마크업과 경로
 
 - [x] `[fs]` 루트 초기화 및 같은 루트의 중복 초기화 방지
-- [x] 루트 직계 `section` 자동 페이지 인식
-- [x] 비 `section` 요소의 `[fs-page]` 예외 인식
+- [x] 루트 직계 `section`과 비 `section`의 `[fs-page]` 예외 인식
 - [x] `[fs-horizon]` 직계 요소를 가로 슬라이드로 자동 인식
-- [x] 가로 슬라이드별 작성자 클래스 없이 Swiper 런타임 구성
 - [x] 가로 → 세로 → 가로를 하나의 평면 경로로 계산
-- [x] 2단계 이상 `[fs-horizon]` 중첩 거부
-- [x] 중복 `[fs-anchor]` 경고 및 두 번째 앵커의 히스토리 제외
+- [x] 2단계 이상 가로 중첩 거부
+- [x] 중복 `[fs-anchor]` 경고 및 잘못된 히스토리 기록 방지
+- [x] `[fs-flow]` 세로 자연 높이 예외
+- [x] 가로 직계 `[fs-flow]` 슬라이드만 자연 너비 처리
+- [x] `[fs-flow-enter]`·`[fs-flow-exit]` 방향별 동반 슬라이드 뷰
+- [x] 동반 뷰 슬라이드의 포커스 접근성 유지
 
-## 입력
+## 입력과 안정화
 
-- [x] 휠 누적 임계값 처리
-- [x] 한 휠 제스처당 한 경로만 이동
-- [x] 키보드 위·아래·PageUp·PageDown·Space·Home·End 이동
-- [x] 가로 그룹 안의 좌·우 방향키 이동
-- [x] 폼 요소와 `[fs-ignore]`에서 입력 가로채기 제외
-- [x] 터치와 펜 제스처의 주 이동축 판정
-- [x] 터치 최소 이동거리 적용
+- [x] 휠 누적 임계값과 한 제스처당 한 경로 이동
+- [x] 키보드 위·아래·좌·우·PageUp·PageDown·Space·Home·End 이동
+- [x] 폼 요소와 `[fs-ignore]` 입력 제외
+- [x] 터치·펜 주 이동축 판정과 최소 이동거리
+- [x] iOS 탄성 스크롤 값을 실제 범위로 보정
+- [x] 연속 `popstate`·`hashchange`에서 마지막 위치 적용
+- [x] bfcache `pageshow`, 화면 회전, 동적 뷰포트 재동기화
+- [x] 비활성 페이지와 가로 슬라이드의 `inert` 포커스 차단
 
-## 내부 스크롤
+## 선언형 퍼블리셔 컨트롤
 
-- [x] `[fs-scroll]`에 이동 공간이 있으면 내부 스크롤 우선
-- [x] 내부 스크롤을 끝까지 움직인 현재 제스처에서는 페이지 고정
-- [x] 경계에서 새로 시작한 터치·휠 제스처로 다음 페이지 이동
-- [x] iOS 탄성 스크롤 값을 실제 스크롤 범위로 보정
-- [x] 역방향도 맨 위에서만 이전 페이지로 이동
+- [x] `[fs-prev]`, `[fs-next]` 자동 연결과 처음·끝 비활성화
+- [x] `[fs-move]`의 `href` 또는 속성값으로 앵커 이동
+- [x] `[fs-current]`, `[fs-total]` 평면 경로 번호 동기화
+- [x] `[fs-progress]`의 `<progress>` 값 및 `--fs-progress` 동기화
+- [x] 현재 `[fs-move]`에 `aria-current="page"` 표시
+- [x] 반응형 모드에서 단계 버튼 비활성화 및 앵커 기본 동작 유지
+- [x] `refresh()` 컨트롤 재탐색
+- [x] `destroy()` 후 외부 컨트롤의 원래 속성과 자식 노드 복원
 
-## 상태와 내비게이션
+## 긴 페이지와 내부 스크롤
 
-- [x] 현재 페이지와 현재 가로 슬라이드에만 `[fs-active]` 표시
-- [x] `[fs-view]`, `[fs-moving]`, `[fs-direction]` 상태 표시
-- [x] 선택형 세로·가로 점 내비게이션 생성
-- [x] 점 내비게이션 `aria-current` 동기화
-- [x] `ready`, `beforechange`, `change`, `responsive`, `resize`, `destroy` 이벤트
-- [x] `beforechange` 취소로 이동 차단
+- [x] 중첩 요소와 페이지 자체의 `[fs-scroll]`
+- [x] CSS `overflow-y: auto|scroll` 중첩 영역 자동 판별
+- [x] 자식 경계에서 스크롤 가능한 부모 영역 우선
+- [x] 내부 스크롤을 움직인 현재 제스처에서는 페이지 고정
+- [x] 전체 경계에서 새 제스처로만 다음·이전 경로 이동
+- [x] 스크롤 위치 기본 유지
+- [x] `[fs-scroll-reset]` 영역을 떠날 때 위치 초기화
+- [x] 네이티브 모바일 관성과 스크롤바 드래그를 FullScroll 제스처에서 제외
+- [x] `--fs-viewport-offset-top`, `--fs-viewport-offset-bottom` 뷰포트 보정
 
-## URL과 API
+## 상태, URL과 API
 
-- [x] `[fs-anchor]` 해시 읽기와 기록
-- [x] 가로 슬라이드 `#anchor/2` 형식 지원
-- [x] 해시 제거·브라우저 뒤로 가기 시 첫 경로 복원
-- [x] `next()`, `prev()`, `moveTo()`
-- [x] `enable()`, `disable()`, `refresh()`, `destroy()`
+- [x] `[fs-active]`, `[fs-view]`, `[fs-moving]`, `[fs-direction]` 상태
+- [x] 선택형 세로·가로 점 내비게이션과 `aria-current`
+- [x] 앵커 해시 읽기·기록·뒤로 가기
+- [x] `next()`, `prev()`, `moveTo()`, `enable()`, `disable()`, `refresh()`, `destroy()`
 - [x] `state`, `FullScroll.get()`, `FullScroll.version`
+- [x] `ready`, `beforechange`, `change`, `responsive`, `resize`, `destroy` 이벤트
 
-## 반응형과 생명주기
+## 반응형, 복원과 배포
 
-- [x] `breakpoint` 이하에서 일반 세로 문서로 전환
-- [x] breakpoint 재진입 시 Swiper 런타임 재구성
-- [x] `prefers-reduced-motion`에서 즉시 전환
-- [x] `refresh()`로 추가된 페이지 재탐색
-- [x] `destroy()` 후 원본 노드 순서와 작성자 속성 복원
-- [x] FullScroll이 생성한 세로·가로 Swiper 인스턴스 제거
-
-## 배포와 데모
-
-- [x] ESM, IIFE, minified JavaScript 빌드
-- [x] 일반·minified CSS 빌드
-- [x] TypeScript 선언 파일 제공
+- [x] breakpoint 이하 일반 세로 문서 전환 및 재진입
+- [x] `prefers-reduced-motion` 즉시 전환
+- [x] `destroy()` 후 원본 DOM 순서와 작성자 속성 복원
+- [x] ESM, IIFE, minified JavaScript·CSS와 TypeScript 선언
 - [x] Swiper를 포함하지 않는 라이브러리 배포물
-- [x] 반응형 데스크톱 데모
-- [x] Swiper와 FullScroll을 포함한 단일 파일 모바일 데모
+- [x] 실제 Swiper 패키지 통합 테스트
+- [x] TypeScript 소비 코드 컴파일 검사
+- [x] 배포 파일 존재·버전·크기 제한 자동 검사
+- [x] 반응형 데스크톱 데모와 완전 독립형 모바일 데모
 
-## 1.0.0에서 제공하지 않음
+## 1.3.0에서 제공하지 않음
 
 - 여러 FullScroll 루트
 - 가로 그룹의 다단 중첩
 - 외부에서 생성한 Swiper 인스턴스 연결
+- 페이지 이동 잠금 API
 - 무한 루프와 자동재생
 - MutationObserver 자동 갱신
 - fullPage.js API 호환 계층
 
-이 범위는 `ROADMAP.md`의 승격 기준을 만족할 때만 확장합니다.
+## 자연 크기 동작 규칙
+
+- `[fs-flow]`가 없는 페이지와 슬라이드는 기존처럼 화면 크기를 유지합니다.
+- 루트 직계 `[fs-flow]` 페이지는 자연 높이를 사용합니다.
+- `[fs-horizon]`의 직계 `[fs-flow]` 슬라이드만 자연 너비를 사용합니다.
+- 자연 크기 슬라이드는 인접 콘텐츠가 같은 화면에 보일 수 있습니다.
+- `fs-flow-enter="prev|next"`와 `fs-flow-exit="prev|next"`는 가로 그룹의 바로 인접한 슬라이드만 지정합니다.
+- 시각적으로 함께 보이는 슬라이드도 원래 경로와 해시를 유지하며, 현재 뷰에 포함된 슬라이드는 `inert`에서 제외합니다.
+
+이후 범위는 `ROADMAP.md`의 승격 기준을 만족할 때만 확장합니다.

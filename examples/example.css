@@ -21,6 +21,38 @@ body {
   color: #fff;
 }
 
+.publisher-controls {
+  position: fixed;
+  top: 22px;
+  left: 50%;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: rgb(8 10 15 / 68%);
+  backdrop-filter: blur(16px);
+  transform: translateX(-50%);
+}
+
+.publisher-controls progress {
+  width: min(22vw, 180px);
+  height: 5px;
+  accent-color: #fff;
+}
+
+.publisher-controls button {
+  min-width: 34px;
+  padding: 7px 10px;
+}
+
+.publisher-controls button:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
 .panel {
   position: relative;
   display: flex;
@@ -121,6 +153,10 @@ code {
   background: rgb(0 0 0 / 14%);
 }
 
+.panel-scroll {
+  justify-content: flex-start;
+}
+
 .scroll-card h2 {
   font-size: clamp(38px, 5vw, 72px);
 }
@@ -141,7 +177,9 @@ code {
   margin-top: 40px;
 }
 
-button {
+button,
+.button {
+  display: inline-block;
   padding: 14px 22px;
   border: 1px solid #fff;
   border-radius: 999px;
@@ -150,6 +188,7 @@ button {
   font: inherit;
   font-weight: 800;
   cursor: pointer;
+  text-decoration: none;
 }
 
 output {

@@ -1,7 +1,10 @@
-export const VERSION = '1.0.0';
+export const VERSION = '1.3.0';
 
 export const INTERACTIVE_SELECTOR =
   'input, textarea, select, option, button, [contenteditable="true"], [contenteditable=""]';
+
+export const WHEEL_INTERACTIVE_SELECTOR =
+  'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
 
 const DEFAULTS = Object.freeze({
   speed: 700,

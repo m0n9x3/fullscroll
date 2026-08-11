@@ -1,6 +1,6 @@
 {
   "name": "@fullscroll/core",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "description": "Publisher-friendly full-page scrolling powered by an external Swiper runtime.",
   "private": true,
   "type": "module",
@@ -28,7 +28,9 @@
     "build": "node scripts/build.mjs && node scripts/build-mobile-demo.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "node --check src/fullscroll.js && node --check src/browser.js && node --check examples/mobile/entry.js && node --check scripts/build-mobile-demo.mjs && vitest run && npm run build"
+    "check:types": "tsc -p tsconfig.types.json",
+    "check:dist": "node scripts/check-build.mjs",
+    "check": "node --check src/fullscroll.js && node --check src/flow.js && node --check src/controls.js && node --check src/scroll.js && node --check src/browser.js && node --check examples/mobile/entry.js && node --check scripts/build-mobile-demo.mjs && vitest run && npm run build && npm run check:types && npm run check:dist"
   },
   "peerDependencies": {
     "swiper": ">=14.0.0 <15.0.0"
@@ -37,6 +39,7 @@
     "esbuild": "^0.25.0",
     "jsdom": "^26.0.0",
     "swiper": "^14.0.0",
+    "typescript": "^7.0.2",
     "vitest": "^3.0.0"
   },
   "keywords": [
