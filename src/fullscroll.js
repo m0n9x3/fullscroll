@@ -16,6 +16,8 @@ import { normalizeWheelDelta, readGesture } from './gestures.js';
 import { createNavigation, syncNavigation } from './navigation.js';
 import { hashForRoute, routeIndexFromHash, scanRoutes, toPublicRoute } from './routes.js';
 import { resolveFlowView } from './flow.js';
+import { EFFECT_NAMES, effectOptions, isEffectName } from './effects.js';
+import { pauseRouteMedia, playRouteMedia } from './media.js';
 import {
   canAnyScroll,
   captureScrollGesture,
@@ -75,6 +77,11 @@ export default class FullScroll {
     this.controls = null;
     this.snapshots = new Map();
     this.generatedNodes = [];
+    this.themeTargets = [];
+    this.themeSnapshots = new Map();
+    this.stepStates = new WeakMap();
+    this.stepElement = null;
+    this.activeMediaElement = null;
     this.readyOnce = false;
 
     this.wheelAccumulator = 0;
@@ -107,9 +114,10 @@ export default class FullScroll {
     this.captureSnapshots();
     this.scan();
     this.setupControls();
+    this.setupThemeTargets();
 
     const locationIndex = this.routeIndexFromLocation();
-    this.currentIndex = locationIndex ?? 0;
+    this.currentIndex = this.normalizeHorizonEntry(locationIndex ?? 0);
 
     window.addEventListener('resize', this.onResize, { passive: true });
     window.addEventListener('orientationchange', this.onResize, { passive: true });
@@ -130,6 +138,7 @@ export default class FullScroll {
   }
 
   get state() {
+    const step = this.currentStepInfo();
     return Object.freeze({
       version: VERSION,
       active: this.active,
@@ -137,6 +146,8 @@ export default class FullScroll {
       moving: this.moving,
       currentIndex: this.currentIndex,
       total: this.routes.length,
+      currentStep: step?.current ?? 1,
+      totalSteps: step?.max ?? 1,
       current: this.publicRoute(this.routes[this.currentIndex]),
     });
   }
@@ -166,6 +177,15 @@ export default class FullScroll {
     this.horizons = structure.horizons;
   }
 
+  readEffect(attributeValue, fallback) {
+    const requested = attributeValue?.trim().toLowerCase() || fallback;
+    if (!requested) return 'slide';
+    if (isEffectName(requested)) return requested;
+
+    this.warn(`effect는 ${EFFECT_NAMES.join(', ')} 중 하나여야 합니다.`);
+    return 'slide';
+  }
+
   setupControls() {
     this.controls?.destroy();
     this.controls = createControls({
@@ -179,6 +199,36 @@ export default class FullScroll {
       onMove: (routeIndex) => this.goToRoute(routeIndex, { trigger: 'control' }),
       warn: (message) => this.warn(message),
     });
+  }
+
+  setupThemeTargets() {
+    this.restoreThemeTargets();
+
+    if (!this.options.themeTarget) return;
+    if (typeof this.options.themeTarget !== 'string') {
+      this.warn('themeTarget은 헤더 요소를 찾는 CSS 선택자 문자열이어야 합니다.');
+      return;
+    }
+
+    try {
+      this.themeTargets = Array.from(document.querySelectorAll(this.options.themeTarget));
+    } catch {
+      this.warn(`themeTarget 선택자가 올바르지 않습니다: ${this.options.themeTarget}`);
+      return;
+    }
+
+    this.themeTargets.forEach((target) => {
+      this.themeSnapshots.set(target, target.getAttribute('fs-theme'));
+    });
+  }
+
+  restoreThemeTargets() {
+    this.themeSnapshots.forEach((theme, target) => {
+      if (theme === null) target.removeAttribute('fs-theme');
+      else target.setAttribute('fs-theme', theme);
+    });
+    this.themeTargets = [];
+    this.themeSnapshots.clear();
   }
 
   syncControls() {
@@ -199,7 +249,7 @@ export default class FullScroll {
     if (rescan) {
       this.scan();
     }
-    this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
+    this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
 
     const currentRoute = this.routes[this.currentIndex];
     const runtime = {
@@ -227,6 +277,15 @@ export default class FullScroll {
     this.root.setAttribute('fs-ready', '');
 
     const hasFlowPage = this.pages.some((page) => page.hasAttribute('fs-flow'));
+    const rootAttributeEffect = this.root.getAttribute('fs-effect');
+    const rootEffect = this.readEffect(
+      rootAttributeEffect,
+      this.options.effect ?? this.options.verticalSwiper.effect,
+    );
+    const horizontalEffect = this.readEffect(
+      rootAttributeEffect,
+      this.options.effect ?? this.options.horizontalSwiper.effect,
+    );
 
     try {
       for (const horizon of this.horizons.values()) {
@@ -246,6 +305,7 @@ export default class FullScroll {
 
         horizon.page.classList.add('swiper', 'fs-horizon-runtime');
         const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute('fs-flow'));
+        const effect = hasFlowSlide ? 'slide' : (horizon.effect ?? horizontalEffect);
         const initialSlide =
           currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null
             ? currentRoute.slideIndex
@@ -253,6 +313,7 @@ export default class FullScroll {
 
         horizon.swiper = new this.Swiper(horizon.page, {
           ...this.options.horizontalSwiper,
+          ...effectOptions(effect, 'horizontal'),
           direction: 'horizontal',
           slidesPerView: hasFlowSlide ? 'auto' : 1,
           ...(hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {}),
@@ -272,6 +333,7 @@ export default class FullScroll {
 
       this.rootSwiper = new this.Swiper(this.root, {
         ...this.options.verticalSwiper,
+        ...effectOptions(hasFlowPage ? 'slide' : rootEffect, 'vertical'),
         direction: 'vertical',
         slidesPerView: hasFlowPage ? 'auto' : 1,
         ...(hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {}),
@@ -290,6 +352,14 @@ export default class FullScroll {
     }
 
     this.active = true;
+    if (currentRoute.slideIndex !== null) {
+      const horizon = this.horizons.get(currentRoute.pageIndex);
+      const flowView = resolveFlowView({ horizon, destination: currentRoute });
+      if (flowView) {
+        horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+        this.flowView = flowView;
+      }
+    }
     this.installRuntimeListeners();
     this.buildNavigation();
     this.syncState();
@@ -359,6 +429,7 @@ export default class FullScroll {
     this.active = false;
     this.moving = false;
     this.flowView = null;
+    this.syncMedia(null);
     this.pointer = null;
     this.touch = null;
   }
@@ -392,7 +463,7 @@ export default class FullScroll {
       return false;
     }
 
-    const nextIndex = clamp(targetIndex, 0, this.routes.length - 1);
+    const nextIndex = this.normalizeHorizonEntry(targetIndex);
     if (nextIndex === this.currentIndex) {
       return false;
     }
@@ -435,25 +506,25 @@ export default class FullScroll {
     try {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
-        const flowView = resolveFlowView({
-          horizon,
-          origin,
-          destination,
-          currentIndex: this.currentIndex,
-          nextIndex,
-        });
-        await this.transitionTo(
+        const flowView = resolveFlowView({ horizon, destination });
+        const transition = this.transitionTo(
           horizon.swiper,
           destination.slideIndex,
           duration,
           flowView?.offset ?? null,
         );
+        await transition;
         this.flowView = flowView;
       } else {
         this.flowView = null;
         if (destination.slideIndex !== null) {
           const horizon = this.horizons.get(destination.pageIndex);
+          const flowView = resolveFlowView({ horizon, destination });
           horizon.swiper.slideTo(destination.slideIndex, 0, false);
+          if (flowView) {
+            horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+            this.flowView = flowView;
+          }
         }
 
         await this.transitionTo(this.rootSwiper, destination.pageIndex, duration);
@@ -464,6 +535,7 @@ export default class FullScroll {
       }
 
       this.currentIndex = nextIndex;
+      this.applyStepEntry(destination, origin);
       this.syncState();
       resetRouteScroll(origin);
       if (updateHistory) {
@@ -536,11 +608,89 @@ export default class FullScroll {
   }
 
   next(options = {}) {
-    return this.goToRoute(this.currentIndex + 1, options);
+    const step = this.currentStepInfo();
+    if (step && step.current < step.max) {
+      return this.goToStep(step.current + 1, options);
+    }
+    return this.goToRoute(this.verticalTargetIndex('next'), options);
   }
 
   prev(options = {}) {
-    return this.goToRoute(this.currentIndex - 1, options);
+    const step = this.currentStepInfo();
+    if (step && step.current > 1) {
+      return this.goToStep(step.current - 1, options);
+    }
+    return this.goToRoute(this.verticalTargetIndex('prev'), options);
+  }
+
+  currentStepInfo(route = this.routes[this.currentIndex]) {
+    if (!route?.stepElement || route.stepMax < 2) return null;
+
+    const current = clamp(this.stepStates.get(route.stepElement) ?? 1, 1, route.stepMax);
+    return { element: route.stepElement, current, max: route.stepMax, reentry: route.stepReentry ?? this.options.stepReentry };
+  }
+
+  applyStepEntry(destination, origin) {
+    const step = this.currentStepInfo(destination);
+    if (!step || step.element === origin?.stepElement) return;
+
+    if (step.reentry === 'first') this.stepStates.set(step.element, 1);
+    else if (step.reentry === 'last') this.stepStates.set(step.element, step.max);
+    else if (!this.stepStates.has(step.element)) this.stepStates.set(step.element, 1);
+  }
+
+  goToStep(targetStep, { trigger = 'api' } = {}) {
+    if (this.destroyed || !this.active || this.moving) return Promise.resolve(false);
+
+    const step = this.currentStepInfo();
+    if (!step) return Promise.resolve(false);
+
+    const nextStep = clamp(targetStep, 1, step.max);
+    if (nextStep === step.current) return Promise.resolve(false);
+
+    const detail = {
+      current: this.publicRoute(this.routes[this.currentIndex]),
+      originStep: step.current,
+      destinationStep: nextStep,
+      totalSteps: step.max,
+      direction: nextStep > step.current ? 'next' : 'prev',
+      trigger,
+    };
+    if (!this.emit('beforestepchange', detail, true)) return Promise.resolve(false);
+
+    this.stepStates.set(step.element, nextStep);
+    this.syncState();
+    this.emit('stepchange', detail);
+    return Promise.resolve(true);
+  }
+
+  verticalTargetIndex(direction) {
+    const current = this.routes[this.currentIndex];
+    const horizon = current ? this.horizons.get(current.pageIndex) : null;
+
+    if (!horizon?.only) {
+      return this.currentIndex + (direction === 'next' ? 1 : -1);
+    }
+
+    const pageIndex = current.pageIndex + (direction === 'next' ? 1 : -1);
+    return this.firstRouteIndexForPage(pageIndex) ?? this.currentIndex;
+  }
+
+  firstRouteIndexForPage(pageIndex) {
+    return this.routes.find((route) => route.pageIndex === pageIndex)?.index ?? null;
+  }
+
+  normalizeHorizonEntry(targetIndex) {
+    const index = clamp(targetIndex, 0, this.routes.length - 1);
+    const destination = this.routes[index];
+    const horizon = destination ? this.horizons.get(destination.pageIndex) : null;
+    const origin = this.routes[this.currentIndex];
+
+    if (!horizon || (!horizon.only && !horizon.first) || origin?.pageIndex === destination.pageIndex) {
+      return index;
+    }
+
+    return this.firstRouteIndexForPage(destination.pageIndex) ?? index;
   }
 
   moveTo(target, slideIndex = 0, options = {}) {
@@ -792,11 +942,16 @@ export default class FullScroll {
       }
     }
 
-    if (direction > 0) {
-      this.next({ trigger: 'touch' });
-    } else {
-      this.prev({ trigger: 'touch' });
+    const current = this.routes[this.currentIndex];
+    const horizon = current ? this.horizons.get(current.pageIndex) : null;
+    if (!verticalGesture && horizon?.only) {
+      if (direction > 0) this.nextWithinHorizon('touch');
+      else this.prevWithinHorizon('touch');
+      return;
     }
+
+    if (direction > 0) this.next({ trigger: 'touch' });
+    else this.prev({ trigger: 'touch' });
   }
 
   onResize() {
@@ -951,9 +1106,49 @@ export default class FullScroll {
     const view = route.slideIndex === null ? viewName : `${viewName}/${route.slideIndex + 1}`;
     this.root.setAttribute('fs-view', view);
 
+    this.syncStep(route);
+    this.syncTheme(route);
+    this.syncMedia(route);
     this.syncAccessibility(route);
     syncNavigation(this.root, this.horizons, route);
     this.syncControls();
+  }
+
+  syncStep(route) {
+    if (this.stepElement && this.stepElement !== route.stepElement) {
+      this.stepElement.removeAttribute('fs-step-current');
+    }
+
+    const step = this.currentStepInfo(route);
+    this.stepElement = step?.element ?? null;
+    if (step) step.element.setAttribute('fs-step-current', String(step.current));
+  }
+
+  syncMedia(route) {
+    const nextElement = route?.mediaElement ?? null;
+    if (nextElement === this.activeMediaElement) return;
+
+    pauseRouteMedia(this.activeMediaElement);
+    this.activeMediaElement = nextElement;
+    playRouteMedia(nextElement);
+  }
+
+  syncTheme(route) {
+    const theme = route.slide?.getAttribute('fs-theme') ?? route.page.getAttribute('fs-theme');
+    const targets = [this.root, ...this.themeTargets];
+
+    targets.forEach((target) => {
+      if (theme === null) {
+        if (target === this.root) target.removeAttribute('fs-theme');
+        else {
+          const originalTheme = this.themeSnapshots.get(target);
+          if (originalTheme === null) target.removeAttribute('fs-theme');
+          else target.setAttribute('fs-theme', originalTheme);
+        }
+      } else {
+        target.setAttribute('fs-theme', theme);
+      }
+    });
   }
 
   syncAccessibility(route) {
@@ -1052,7 +1247,8 @@ export default class FullScroll {
     this.captureSnapshots();
     this.scan();
     this.setupControls();
-    this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
+    this.setupThemeTargets();
+    this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
 
     if (wasActive && !this.shouldUseResponsiveMode() && !this.manualDisabled) {
       this.enableRuntime();
@@ -1079,6 +1275,9 @@ export default class FullScroll {
     this.root.removeAttribute('fs-disabled');
     this.controls?.destroy();
     this.controls = null;
+    this.restoreThemeTargets();
+    this.stepElement?.removeAttribute('fs-step-current');
+    this.stepElement = null;
     this.destroyed = true;
     INSTANCES.delete(this.root);
     this.emit('destroy', {});

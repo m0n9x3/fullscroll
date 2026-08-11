@@ -1,41 +1,89 @@
 import { clamp, getDirectElements, getDirectPages } from './dom.js';
+import { EFFECT_NAMES, isEffectName } from './effects.js';
 
 const FLOW_RELATIONS = new Set(['prev', 'next']);
+const STEP_REENTRIES = new Set(['preserve', 'first', 'last']);
+
+function readEffect(element, warn) {
+  const effect = element.getAttribute('fs-effect')?.trim().toLowerCase() || null;
+  if (!effect) return null;
+  if (isEffectName(effect)) return effect;
+
+  warn(`[fs-effect]는 ${EFFECT_NAMES.join(', ')} 중 하나여야 합니다.`);
+  return null;
+}
 
 function readFlowSettings(element, warn, { allowRelations = true } = {}) {
   const flow = element.hasAttribute('fs-flow');
   const settings = {
     flow,
-    flowEnterWith: null,
-    flowExitWith: null,
+    flowEnterSide: null,
+    flowExitSide: null,
   };
 
-  for (const [attribute, key] of [
-    ['fs-flow-enter', 'flowEnterWith'],
-    ['fs-flow-exit', 'flowExitWith'],
-  ]) {
-    const value = element.getAttribute(attribute)?.trim().toLowerCase() || null;
-    if (!value) continue;
+  const rawValue = element.getAttribute('fs-flow')?.trim().toLowerCase() || '';
+  if (!rawValue) return settings;
 
-    if (!flow) {
-      warn(`[${attribute}]은 fs-flow가 붙은 요소에서만 사용할 수 있습니다.`);
-      continue;
+  if (!allowRelations) {
+    warn('fs-flow의 방향값은 fs-horizon의 직계 fs-flow 슬라이드에서만 사용할 수 있습니다.');
+    return settings;
+  }
+
+  const sides = rawValue.split(',').map((value) => value.trim());
+  if (sides.length > 2 || sides.some((value) => value && !FLOW_RELATIONS.has(value))) {
+    warn('fs-flow에는 prev, next 또는 prev,next 형식만 사용할 수 있습니다.');
+    return settings;
+  }
+
+  settings.flowEnterSide = sides[0] || null;
+  settings.flowExitSide = sides[1] || null;
+
+  return settings;
+}
+
+function readStepSettings(element, warn) {
+  const rawSteps = element.getAttribute('fs-step');
+  const rawReentry = element.getAttribute('fs-step-reentry')?.trim().toLowerCase() || null;
+  const settings = { stepMax: 0, stepReentry: null };
+
+  if (rawSteps !== null) {
+    const stepMax = Number.parseInt(rawSteps, 10);
+    if (!Number.isInteger(stepMax) || stepMax < 2 || String(stepMax) !== rawSteps.trim()) {
+      warn('fs-step은 2 이상의 정수여야 합니다.');
+    } else {
+      settings.stepMax = stepMax;
     }
+  }
 
-    if (!allowRelations) {
-      warn(`${attribute}은 fs-horizon의 직계 fs-flow 슬라이드에서만 사용할 수 있습니다.`);
-      continue;
+  if (rawReentry) {
+    if (!STEP_REENTRIES.has(rawReentry)) {
+      warn('fs-step-reentry는 preserve, first, last 중 하나여야 합니다.');
+    } else {
+      settings.stepReentry = rawReentry;
     }
-
-    if (!FLOW_RELATIONS.has(value)) {
-      warn(`${attribute}에는 prev 또는 next만 사용할 수 있습니다.`);
-      continue;
-    }
-
-    settings[key] = value;
   }
 
   return settings;
+}
+
+function createRoute({ routes, page, pageIndex, slide = null, slideIndex = null, anchor, horizon, warn }) {
+  const flow = readFlowSettings(slide ?? page, warn, { allowRelations: slide !== null });
+  const step = readStepSettings(slide ?? page, warn);
+
+  return {
+    index: routes.length,
+    page,
+    pageIndex,
+    slide,
+    slideIndex,
+    anchor,
+    horizonOnly: horizon?.only ?? false,
+    horizonFirst: horizon?.first ?? false,
+    stepElement: step.stepMax ? (slide ?? page) : null,
+    ...step,
+    mediaElement: (slide ?? page).hasAttribute('fs-video') ? (slide ?? page) : null,
+    ...flow,
+  };
 }
 
 export function scanRoutes(root, warn) {
@@ -73,44 +121,37 @@ export function scanRoutes(root, warn) {
       );
     }
 
+    if (page.hasAttribute('fs-step') && isHorizon) {
+      warn('fs-step은 fs-horizon의 직계 슬라이드에 붙여야 합니다. 가로 그룹 자체에는 적용되지 않습니다.');
+    }
+
     if (page.hasAttribute('fs-horizon') && !isHorizon) {
       warn(`가로 그룹 ${pageIndex + 1}에 슬라이드가 2개 이상 필요합니다.`);
     }
 
     if (!isHorizon) {
-      const flow = readFlowSettings(page, warn, { allowRelations: false });
-      routes.push({
-        index: routes.length,
-        page,
-        pageIndex,
-        slide: null,
-        slideIndex: null,
-        anchor,
-        ...flow,
-      });
+      routes.push(createRoute({ routes, page, pageIndex, anchor, warn }));
       return;
     }
 
-    horizons.set(pageIndex, {
+    const horizon = {
       page,
       pageIndex,
       slides,
       wrapper: null,
       swiper: null,
       nav: null,
-    });
+      routes: [],
+      effect: readEffect(page, warn),
+      only: page.hasAttribute('fs-horizon-only'),
+      first: page.hasAttribute('fs-horizon-first'),
+    };
+    horizons.set(pageIndex, horizon);
 
     slides.forEach((slide, slideIndex) => {
-      const flow = readFlowSettings(slide, warn);
-      routes.push({
-        index: routes.length,
-        page,
-        pageIndex,
-        slide,
-        slideIndex,
-        anchor,
-        ...flow,
-      });
+      const route = createRoute({ routes, page, pageIndex, slide, slideIndex, anchor, horizon, warn });
+      routes.push(route);
+      horizon.routes.push(route);
     });
   });
 
@@ -156,7 +197,11 @@ export function toPublicRoute(route) {
     page: route.page,
     slide: route.slide,
     flow: route.flow,
-    flowEnterWith: route.flowEnterWith,
-    flowExitWith: route.flowExitWith,
+    flowEnterSide: route.flowEnterSide,
+    flowExitSide: route.flowExitSide,
+    horizonOnly: route.horizonOnly,
+    horizonFirst: route.horizonFirst,
+    stepMax: route.stepMax,
+    stepReentry: route.stepReentry,
   });
 }

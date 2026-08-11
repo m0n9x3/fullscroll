@@ -2,6 +2,8 @@
 
 FullScroll은 세로 풀페이지와 가로 슬라이드가 자주 교차하는 사이트를 위한 바닐라 JavaScript 컨트롤러입니다. Swiper를 애니메이션 엔진으로 사용하지만, 작성자가 Swiper용 래퍼나 슬라이드 클래스를 직접 붙일 필요는 없습니다.
 
+로컬에서 기능별 설명과 실제 데모를 한 번에 보려면 [전체 기능 문서](examples/docs/index.html)를 엽니다.
+
 ```text
 가로 1 → 가로 2 → 가로 3 → 세로 1 → 세로 2 → 가로 1 → 가로 2 → 가로 3
 ```
@@ -94,15 +96,27 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 | 루트 바로 아래 `section` | 별도 선언 없이 세로 페이지가 됩니다. |
 | `[fs-page]` | `section`이 아닌 요소를 세로 페이지로 쓸 때만 붙입니다. |
 | `[fs-horizon]` | 해당 페이지의 직계 요소 자식을 가로 슬라이드로 만듭니다. 최소 2개가 필요합니다. |
+| `[fs-horizon-only]` | 가로 슬라이드는 좌우 입력으로만 이동합니다. 위·아래 입력은 현재 가로 슬라이드 위치를 무시하고 앞뒤 세로 페이지로 이동합니다. |
+| `[fs-horizon-first]` | 다른 세로 페이지에서 이 가로 그룹으로 들어올 때마다 첫 번째 슬라이드부터 시작합니다. |
 | `[fs-flow]` | 일반 세로 페이지는 자연 높이, `fs-horizon`의 직계 슬라이드는 자연 너비로 처리합니다. 붙이지 않은 요소는 기존 화면 크기를 유지합니다. |
-| `[fs-flow-enter="prev|next"]` | 가로 `fs-flow` 슬라이드로 들어올 때 함께 보일 인접 슬라이드 방향입니다. |
-| `[fs-flow-exit="prev|next"]` | 가로 `fs-flow` 슬라이드에서 나갈 때 함께 보일 인접 슬라이드 방향입니다. |
+| `[fs-flow="prev,next"]` | 가로 Flow의 동반 방향을 진입·이탈 순서로 지정합니다. 값이 없으면 자연 크기만 적용합니다. |
+| `[fs-step="number"]` | 같은 영역에서 지정한 단계만큼 내부 연출을 진행한 뒤 다음 경로로 이동합니다. 일반 세로 섹션 또는 가로 그룹의 직계 슬라이드에 붙입니다. |
+| `[fs-step-reentry]` | 단계 섹션 재진입 시점의 상태입니다. `preserve`, `first`, `last` 중 하나입니다. |
+| `[fs-effect]` | `[fs]` 루트 또는 `[fs-horizon]`에 전환 효과를 지정합니다. |
+| `[fs-video]` | 현재 경로에서만 내부 `video`, Vimeo 또는 YouTube iframe을 재생하고, 이탈하면 일시정지합니다. |
 | `[fs-scroll]` | 내부 스크롤 영역. 스크롤 끝에 도달한 뒤에만 다음 바닥으로 이동합니다. |
 | `[fs-scroll-reset]` | 해당 스크롤 페이지나 영역을 떠날 때 위치를 처음으로 되돌립니다. |
 | `[fs-ignore]` | 휠·터치 입력을 FullScroll이 처리하지 않을 예외 영역입니다. |
 | `[fs-anchor="name"]` | URL 해시 및 `moveTo()`에 사용할 선택 앵커입니다. |
+| `[fs-theme="name"]` | 현재 섹션(가로 그룹에서는 슬라이드)의 테마 이름입니다. `themeTarget`에 자동 반영합니다. |
 
 `[fs-horizon]` 내부에 다시 `[fs-horizon]`을 넣는 중첩 구조는 1.3.0에서 지원하지 않습니다.
+
+### 가로 이동 예외
+
+`[fs-horizon-only]`는 가로 그룹을 세로 이동 안에 가두지 않습니다. 가로 그룹에 들어온 상태에서 휠, 위·아래 키, 세로 터치, `next()`/`prev()`를 사용하면 내부 가로 슬라이드를 건너뛰고 이전 또는 다음 세로 페이지로 이동합니다. 좌우 키와 가로 터치는 그룹 안의 슬라이드를 이동합니다. 다른 세로 페이지에서 그룹으로 들어올 때는 항상 첫 번째 슬라이드가 표시됩니다.
+
+`[fs-horizon-first]`는 일반 가로 그룹에 적용하는 재진입 규칙입니다. 마지막으로 보던 가로 슬라이드와 관계없이, 다른 세로 페이지에서 다시 들어오면 첫 슬라이드가 표시됩니다. 두 선언은 함께 사용할 수 있습니다.
 
 ### 자연 크기 예외
 
@@ -120,12 +134,12 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 
   <section fs-horizon>
     <article>1 · 화면 너비</article>
-    <article fs-flow fs-flow-enter="prev" fs-flow-exit="next">
+    <article fs-flow="prev,next">
       2 · 1과 함께 들어오고 3과 함께 나가는 자연 너비
     </article>
     <article>3 · 화면 너비</article>
     <article>4 · 화면 너비</article>
-    <article fs-flow fs-flow-enter="next">
+    <article fs-flow="next">
       5 · 들어올 때 6과 함께 보이는 자연 너비
     </article>
     <article>6 · 일반 이동</article>
@@ -133,7 +147,79 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 </main>
 ```
 
-`fs-flow-enter`와 `fs-flow-exit`은 가로 그룹의 바로 앞·뒤 슬라이드만 대상으로 합니다. 슬라이드를 새 그룹으로 합치지 않으므로 URL 해시, 경로 번호, `fs-active`와 접근성 상태는 원래 슬라이드 단위로 유지됩니다. 자연 크기 콘텐츠가 바뀐 뒤에는 `refresh()`를 호출해 Swiper의 크기를 다시 계산합니다.
+`fs-flow="prev,next"`의 첫 번째 값은 Flow 슬라이드 자체의 뷰, 두 번째 값은 이탈 방향의 인접 슬라이드 뷰를 지정합니다. 예를 들어 `fs-flow="prev,next"`인 2번 슬라이드는 항상 `1 | 2`, 다음 3번 슬라이드는 항상 `2 | 3`으로 보입니다. 정방향·역방향·해시 진입·API 이동 모두 같은 경로 뷰를 사용합니다. 슬라이드를 새 그룹으로 합치지 않으므로 URL 해시, 경로 번호, `fs-active`와 접근성 상태는 원래 슬라이드 단위로 유지됩니다. 자연 크기 콘텐츠가 바뀐 뒤에는 `refresh()`를 호출해 Swiper의 크기를 다시 계산합니다.
+
+### 헤더 테마
+
+`themeTarget`에 헤더·퀵 메뉴 선택자를 지정하면 현재 섹션의 `[fs-theme]` 값이 대상 요소의 `fs-theme` 속성으로 자동 반영됩니다. 별도 이벤트 처리 없이 CSS만 작성하면 됩니다. 테마가 없는 섹션에서는 대상의 초기 `fs-theme` 값으로 돌아갑니다.
+
+```js
+new FullScroll('[fs]', { themeTarget: '#header, .quick, .btn_all' });
+```
+
+```html
+<section fs-theme="dark">...</section>
+<section fs-theme="light">...</section>
+```
+
+```css
+#header[fs-theme="dark"] { color: #fff; }
+#header[fs-theme="light"] { color: #111; }
+```
+
+### 섹션 내부 단계와 영상
+
+`[fs-step="3"]`을 붙이면 해당 화면은 그대로 유지되고, 위·아래 휠·키·세로 스와이프·`next()`/`prev()`가 먼저 1 → 2 → 3단계를 이동합니다. 마지막 단계에서만 다음 경로로 넘어갑니다. 현재 단계는 대상 요소의 `fs-step-current="1"`처럼 반영되므로 CSS로 요소 등장·이동 연출을 작성하면 됩니다. 단계는 URL과 브라우저 히스토리에 기록하지 않습니다.
+
+기본 재진입 정책은 `stepReentry: 'preserve'`입니다. 섹션별로만 예외가 필요하면 `fs-step-reentry="first"` 또는 `fs-step-reentry="last"`를 붙입니다.
+
+```html
+<section fs-step="3" fs-step-reentry="first">
+  <h2 class="scene-title">첫 장면</h2>
+  <img class="scene-image" src="..." alt="">
+  <p class="scene-copy">마지막 장면</p>
+</section>
+
+<section fs-video>
+  <video muted playsinline src="movie.mp4"></video>
+</section>
+```
+
+```css
+[fs-step-current="1"] .scene-image,
+[fs-step-current="1"] .scene-copy,
+[fs-step-current="2"] .scene-copy { opacity: 0; transform: translateY(24px); }
+[fs-step-current="2"] .scene-image,
+[fs-step-current="3"] .scene-copy { opacity: 1; transform: none; }
+```
+
+`[fs-video]`는 활성 경로의 HTML `video`와 Vimeo·YouTube iframe에 재생을 요청하고, 경로를 떠나면 일시정지를 요청합니다. 브라우저 자동재생 정책상 무음(`muted`)과 `playsinline`을 권장합니다.
+
+## 슬라이드 전환 효과
+
+기본은 `slide`입니다. `[fs]`에 지정하면 세로 전환과 별도 지정이 없는 가로 그룹의 기본값이 되고, `[fs-horizon]`에 지정하면 해당 가로 그룹만 바꿉니다.
+
+```html
+<main fs fs-effect="fade">
+  <section fs-horizon fs-effect="depth">
+    <article>...</article>
+    <article>...</article>
+  </section>
+</main>
+```
+
+| 값 | 동작 |
+| --- | --- |
+| `slide` | 기본 밀기 전환 |
+| `fade` | 이전·다음 화면을 교차 페이드 |
+| `creative` | 기본 크리에이티브 전환 |
+| `depth` | 뒤쪽 깊이로 밀려나는 전환 |
+| `layers` | 양쪽 레이어가 회전하며 쌓이는 전환 |
+| `zoom` | 원근 확대·축소 전환 |
+
+`fs-flow`가 있는 세로 루트 또는 가로 그룹은 자연 크기와 인접 슬라이드 노출을 보존하기 위해 항상 `slide`로 동작합니다. `fs-effect`, `effect`, `verticalSwiper.effect`, `horizontalSwiper.effect`보다 우선합니다.
+
+효과 모듈과 CSS는 FullScroll에 포함하지 않습니다. 모듈 환경에서는 필요한 Swiper 효과 모듈과 CSS를 직접 불러오고, 가장 간단하게는 `swiper/bundle` 및 `swiper/css/bundle`을 사용하면 됩니다.
 
 긴 페이지는 별도 래퍼 없이 `section` 자체에 `[fs-scroll]`을 붙일 수 있습니다.
 
@@ -158,14 +244,15 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 
 ```js
 new FullScroll('[fs]', {
-  speed: 700,
-  easing: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
+  speed: 1200,
+  easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
   breakpoint: 720,
   wheelThreshold: 40,
   wheelIdle: 160,
   touchThreshold: 44,
   dots: false,
   history: true,
+  effect: 'slide',
   Swiper,
   verticalSwiper: {},
   horizontalSwiper: {}
@@ -175,13 +262,14 @@ new FullScroll('[fs]', {
 | 옵션 | 기본값 | 설명 |
 | --- | ---: | --- |
 | `speed` | `700` | Swiper 전환 시간(ms) |
-| `easing` | `cubic-bezier(...)` | 래퍼 전환 타이밍 함수 |
+| `easing` | `cubic-bezier(0.22, 1, 0.36, 1)` | 전체 슬라이드 전환 타이밍 함수 |
 | `breakpoint` | `0` | 이 너비 이하에서 일반 세로 문서로 전환. `0`은 사용 안 함 |
 | `wheelThreshold` | `40` | 한 번의 이동으로 인정할 휠 누적값 |
 | `wheelIdle` | `160` | 하나의 휠 제스처가 끝났다고 판단할 대기 시간(ms) |
 | `touchThreshold` | `44` | 터치 이동 최소 거리(px) |
 | `dots` | `false` | 세로·가로 점 내비게이션 생성 여부 |
 | `history` | `true` | `fs-anchor`가 있을 때 URL 해시 기록 여부 |
+| `effect` | `'slide'` | 루트 및 별도 지정 없는 가로 그룹의 전환 효과 |
 | `Swiper` | 전역 `Swiper` | 모듈 환경에서 전달할 Swiper 생성자 |
 | `verticalSwiper` | `{}` | 세로 Swiper에 추가할 옵션 |
 | `horizontalSwiper` | `{}` | 모든 가로 Swiper에 추가할 옵션 |

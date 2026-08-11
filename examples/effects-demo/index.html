@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll 전환 효과 데모</title>
+    <link rel="stylesheet" href="../../node_modules/swiper/swiper-bundle.min.css">
+    <link rel="stylesheet" href="../../dist/fullscroll.css">
+    <link rel="stylesheet" href="../demo-kit.css">
+    <style>
+      .effect-picker { position: fixed; right: 18px; top: 18px; z-index: 41; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; max-width: min(50vw, 420px); }
+      .effect-picker a { padding: 6px 9px; border-radius: 7px; background: rgb(0 0 0 / 52%); color: #fff; font-size: 12px; text-decoration: none; }
+      .effect-picker a[aria-current="true"] { background: #fff; color: #111827; font-weight: 800; }
+    </style>
+  </head>
+  <body>
+    <nav class="effect-picker" aria-label="전환 효과 선택">
+      <a href="?effect=slide">slide</a><a href="?effect=fade">fade</a><a href="?effect=creative">creative</a><a href="?effect=depth">depth</a><a href="?effect=layers">layers</a><a href="?effect=zoom">zoom</a>
+    </nav>
+    <p class="demo-note" fs-ignore><strong id="effect-name">slide</strong> · 위아래로 내려가면 세로 전환, 가로 그룹에서는 좌우로 가로 전환을 같은 효과로 확인할 수 있습니다.</p>
+    <p class="demo-links" fs-ignore><a href="../docs/">문서로 돌아가기</a></p>
+    <main fs>
+      <section class="panel blue"><div><h1>Vertical A</h1><p>먼저 아래로 이동해 세로 전환 효과를 확인하세요.</p></div></section>
+      <section class="panel orange"><div><h2>Vertical B</h2><p>선택한 효과는 세로 루트에도 적용됩니다.</p></div></section>
+      <section fs-horizon aria-label="가로 효과 그룹"><article class="panel teal"><div><h2>Horizontal 1</h2><p>이제 좌우 키 또는 가로 스와이프를 사용하세요.</p></div></article><article class="panel purple"><div><h2>Horizontal 2</h2><p>같은 효과가 가로 전환에도 적용됩니다.</p></div></article><article class="panel sky"><div><h2>Horizontal 3</h2><p>우측 상단에서 다른 효과를 즉시 바꿔 볼 수 있습니다.</p></div></article></section>
+      <section class="panel light"><div><h2>Vertical C</h2><p>다시 위아래 전환으로 이어집니다.</p></div></section>
+    </main>
+    <script src="../../node_modules/swiper/swiper-bundle.min.js"></script>
+    <script src="../../dist/fullscroll.js"></script>
+    <script>
+      const allowed = ['slide', 'fade', 'creative', 'depth', 'layers', 'zoom'];
+      const requested = new URLSearchParams(location.search).get('effect');
+      const effect = allowed.includes(requested) ? requested : 'slide';
+      document.querySelector('[fs]').setAttribute('fs-effect', effect);
+      document.querySelector('#effect-name').textContent = effect;
+      document.querySelector(`.effect-picker a[href="?effect=${effect}"]`).setAttribute('aria-current', 'true');
+      window.fullscrollEffectsDemo = new FullScroll('[fs]', { Swiper, speed: 1200, dots: true, history: true });
+    </script>
+  </body>
+</html>

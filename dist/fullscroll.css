@@ -36,6 +36,12 @@
   max-width: 100%;
 }
 [fs][fs-ready] .swiper-wrapper {
+  --swiper-wrapper-transition-timing-function: var(--fs-easing, ease);
+  transition-timing-function: var(--fs-easing, ease);
+}
+[fs][fs-ready] .swiper-slide,
+[fs][fs-ready] .swiper-slide-transform,
+[fs][fs-ready] .swiper-slide-shadow {
   transition-timing-function: var(--fs-easing, ease);
 }
 [fs] [fs-scroll] {

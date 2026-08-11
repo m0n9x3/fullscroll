@@ -9,8 +9,12 @@ export interface FullScrollRoute {
   readonly page: HTMLElement;
   readonly slide: HTMLElement | null;
   readonly flow: boolean;
-  readonly flowEnterWith: 'prev' | 'next' | null;
-  readonly flowExitWith: 'prev' | 'next' | null;
+  readonly flowEnterSide: 'prev' | 'next' | null;
+  readonly flowExitSide: 'prev' | 'next' | null;
+  readonly horizonOnly: boolean;
+  readonly horizonFirst: boolean;
+  readonly stepMax: number;
+  readonly stepReentry: 'preserve' | 'first' | 'last' | null;
 }
 
 export interface FullScrollState {
@@ -20,6 +24,8 @@ export interface FullScrollState {
   readonly moving: boolean;
   readonly currentIndex: number;
   readonly total: number;
+  readonly currentStep: number;
+  readonly totalSteps: number;
   readonly current: FullScrollRoute | null;
 }
 
@@ -32,6 +38,9 @@ export interface FullScrollOptions {
   touchThreshold?: number;
   dots?: boolean;
   history?: boolean;
+  effect?: 'slide' | 'fade' | 'creative' | 'depth' | 'layers' | 'zoom';
+  stepReentry?: 'preserve' | 'first' | 'last';
+  themeTarget?: string;
   Swiper?: typeof Swiper;
   verticalSwiper?: SwiperOptions;
   horizontalSwiper?: SwiperOptions;

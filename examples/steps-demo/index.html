@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll 단계와 영상 데모</title>
+    <link rel="stylesheet" href="../../node_modules/swiper/swiper-bundle.min.css">
+    <link rel="stylesheet" href="../../dist/fullscroll.css">
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #101827; color: #fff; font-family: system-ui, sans-serif; }
+      .panel { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; overflow: hidden; padding: 9vw; text-align: center; }
+      .panel > div { max-width: 760px; }
+      h1, h2 { margin: 0; font-size: clamp(42px, 9vw, 108px); letter-spacing: -.075em; }
+      p { margin: 18px 0 0; font-size: clamp(16px, 2vw, 21px); line-height: 1.55; }
+      .notice { position: fixed; top: 16px; left: 50%; z-index: 30; margin: 0; padding: 8px 14px; border-radius: 999px; background: rgb(0 0 0 / 42%); font-size: 13px; transform: translateX(-50%); }
+      .story { position: relative; background: #4338ca; }
+      .story .scene { position: absolute; left: 50%; top: 50%; width: min(82vw, 760px); transition: opacity 720ms cubic-bezier(.22,1,.36,1), transform 900ms cubic-bezier(.22,1,.36,1); }
+      .story .scene-one { transform: translate(-50%, -50%); }
+      .story .scene-two, .story .scene-three { opacity: 0; transform: translate(-50%, calc(-50% + 56px)); }
+      .story[fs-step-current="2"] .scene-one { opacity: 0; transform: translate(-50%, calc(-50% - 48px)); }
+      .story[fs-step-current="2"] .scene-two { opacity: 1; transform: translate(-50%, -50%); }
+      .story[fs-step-current="3"] .scene-one, .story[fs-step-current="3"] .scene-two { opacity: 0; transform: translate(-50%, calc(-50% - 48px)); }
+      .story[fs-step-current="3"] .scene-three { opacity: 1; transform: translate(-50%, -50%); }
+      .movie { position: relative; background: #0f766e; }
+      .movie video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .65; }
+      .movie > div { position: relative; z-index: 1; text-shadow: 0 2px 16px rgb(0 0 0 / 55%); }
+      .end { background: #f8fafc; color: #111827; }
+    </style>
+  </head>
+  <body>
+    <p class="notice" fs-ignore><strong>fs-step="3"</strong> · 첫 화면에서 위아래 입력을 세 번 해보세요. 1 → 2 → 3은 화면 내부 연출만 바꾸고, 네 번째 입력에서 영상 화면으로 이동합니다.</p>
+    <main fs>
+      <section class="panel story" fs-step="3" fs-step-reentry="first">
+        <div class="scene scene-one"><h1>첫 장면</h1><p>아래로 한 번 이동해도 섹션은 바뀌지 않습니다.</p></div>
+        <div class="scene scene-two"><h2>두 번째 장면</h2><p><code>fs-step-current="2"</code>에 맞춘 CSS 연출입니다.</p></div>
+        <div class="scene scene-three"><h2>세 번째 장면</h2><p>다음 입력에서만 영상 섹션으로 이동합니다.</p></div>
+      </section>
+      <section class="panel movie" fs-video>
+        <video muted playsinline loop preload="metadata" src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"></video>
+        <div><h2>영상</h2><p>진입 시 재생을 요청하고, 다음 화면으로 나가면 일시정지합니다.</p></div>
+      </section>
+      <section class="panel end"><div><h2>끝</h2><p>URL에는 단계 상태가 남지 않습니다.</p></div></section>
+    </main>
+    <script src="../../node_modules/swiper/swiper-bundle.min.js"></script>
+    <script src="../../dist/fullscroll.js"></script>
+    <script>window.fullscrollStepsDemo = new FullScroll('[fs]', { Swiper, speed: 1200, dots: true, history: true });</script>
+  </body>
+</html>

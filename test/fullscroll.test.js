@@ -166,6 +166,55 @@ describe('FullScroll 1.3.0', () => {
     expect(root.querySelector(':scope > .fs-vertical-wrapper')).not.toBeNull();
     expect(root.querySelector('[fs-horizon] > .fs-horizon-wrapper')).not.toBeNull();
     expect(root.querySelectorAll('[fs-active]')).toHaveLength(2);
+    expect(root.style.getPropertyValue('--fs-easing')).toBe('cubic-bezier(0.22, 1, 0.36, 1)');
+  });
+
+  it('applies named effects to full-view root and horizontal groups', () => {
+    const root = mount(`
+      <main fs fs-effect="fade">
+        <section fs-horizon fs-effect="depth">
+          <article>One</article><article>Two</article>
+        </section>
+        <section>Three</section>
+      </main>
+    `);
+    create(root);
+
+    expect(FakeSwiper.instances[0].options.effect).toBe('creative');
+    expect(FakeSwiper.instances[0].options.creativeEffect.prev.translate).toEqual([0, 0, -800]);
+    expect(FakeSwiper.instances[1].options.effect).toBe('fade');
+    expect(FakeSwiper.instances[1].options.fadeEffect.crossFade).toBe(true);
+  });
+
+  it('uses the vertical axis for creative presets on the root Swiper', () => {
+    const root = mount(`
+      <main fs fs-effect="layers">
+        <section>One</section><section>Two</section>
+      </main>
+    `);
+    create(root);
+
+    expect(FakeSwiper.instances[0].options.effect).toBe('creative');
+    expect(FakeSwiper.instances[0].options.creativeEffect.next.translate).toEqual([0, '110%', -260]);
+    expect(FakeSwiper.instances[0].options.creativeEffect.prev.translate).toEqual([0, '-110%', -260]);
+  });
+
+  it('forces slide transitions for every fs-flow viewport', () => {
+    const root = mount(`
+      <main fs fs-effect="fade">
+        <section fs-flow>Compact</section>
+        <section fs-horizon fs-effect="zoom">
+          <article>One</article><article fs-flow>Two</article>
+        </section>
+      </main>
+    `);
+    create(root, {
+      verticalSwiper: { effect: 'creative' },
+      horizontalSwiper: { effect: 'creative' },
+    });
+
+    expect(FakeSwiper.instances[0].options.effect).toBe('slide');
+    expect(FakeSwiper.instances[1].options.effect).toBe('slide');
   });
 
   it('keeps fs-flow sizing and directional companion rules on the public route', () => {
@@ -174,10 +223,10 @@ describe('FullScroll 1.3.0', () => {
         <section fs-flow fs-anchor="compact">Compact</section>
         <section fs-horizon fs-anchor="mixed">
           <article>One</article>
-          <article fs-flow fs-flow-enter="prev" fs-flow-exit="next">Two</article>
+          <article fs-flow="prev,next">Two</article>
           <article>Three</article>
           <article>Four</article>
-          <article fs-flow fs-flow-enter="next">Five</article>
+          <article fs-flow="next">Five</article>
           <article>Six</article>
         </section>
       </main>
@@ -188,9 +237,9 @@ describe('FullScroll 1.3.0', () => {
     expect(instance.state.current.flow).toBe(true);
     expect(instance.routes[0].flow).toBe(true);
     expect(instance.routes[2].flow).toBe(true);
-    expect(instance.routes[2].flowEnterWith).toBe('prev');
-    expect(instance.routes[2].flowExitWith).toBe('next');
-    expect(instance.routes[5].flowEnterWith).toBe('next');
+    expect(instance.routes[2].flowEnterSide).toBe('prev');
+    expect(instance.routes[2].flowExitSide).toBe('next');
+    expect(instance.routes[5].flowEnterSide).toBe('next');
     expect(FakeSwiper.instances[0].options.slidesPerView).toBe('auto');
     expect(FakeSwiper.instances[1].options.slidesPerView).toBe('auto');
     expect(FakeSwiper.instances[0].options.slidesPerGroup).toBe(1);
@@ -201,10 +250,10 @@ describe('FullScroll 1.3.0', () => {
       <main fs>
         <section fs-horizon fs-anchor="mixed">
           <article>One</article>
-          <article fs-flow fs-flow-enter="prev" fs-flow-exit="next">Two</article>
+          <article fs-flow="prev,next">Two</article>
           <article>Three</article>
           <article>Four</article>
-          <article fs-flow fs-flow-enter="next">Five</article>
+          <article fs-flow="next">Five</article>
           <article>Six</article>
         </section>
       </main>
@@ -243,12 +292,44 @@ describe('FullScroll 1.3.0', () => {
     expect(horizon.swiper.lastTranslate).toBe(-3200);
   });
 
+  it('keeps each fs-flow route viewport identical in both directions', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon fs-anchor="mixed">
+          <article>One</article>
+          <article fs-flow="prev,next">Two</article>
+          <article>Three</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root);
+    const horizon = instance.horizons.get(0);
+    Object.defineProperty(horizon.page, 'clientWidth', { configurable: true, value: 1000 });
+    const geometry = [[0, 1000], [1000, 200], [1200, 1000]];
+    horizon.slides.forEach((slide, index) => {
+      Object.defineProperty(slide, 'offsetLeft', { configurable: true, value: geometry[index][0] });
+      Object.defineProperty(slide, 'offsetWidth', { configurable: true, value: geometry[index][1] });
+    });
+
+    await instance.next();
+    expect(horizon.swiper.lastTranslate).toBe(-200);
+    expect(instance.flowView.companion).toBe(horizon.slides[0]);
+
+    await instance.next();
+    expect(horizon.swiper.lastTranslate).toBe(-1000);
+    expect(instance.flowView.companion).toBe(horizon.slides[2]);
+
+    await instance.prev();
+    expect(horizon.swiper.lastTranslate).toBe(-200);
+    expect(instance.flowView.companion).toBe(horizon.slides[0]);
+  });
+
   it('uses Swiper slide grids when resolving flow companion offsets', async () => {
     const root = mount(`
       <main fs>
         <section fs-horizon fs-anchor="mixed">
           <article>One</article>
-          <article fs-flow fs-flow-enter="prev">Two</article>
+          <article fs-flow="prev">Two</article>
           <article>Three</article>
         </section>
       </main>
@@ -303,6 +384,172 @@ describe('FullScroll 1.3.0', () => {
     await instance.prev();
     expect(instance.state.current.pageIndex).toBe(0);
     expect(instance.state.current.slideIndex).toBe(2);
+  });
+
+  it('mirrors the active fs-theme to configured header targets', async () => {
+    const root = mount(`
+      <header id="header" fs-theme="default"></header>
+      <main fs>
+        <section fs-theme="dark">Dark</section>
+        <section fs-theme="light">Light</section>
+        <section>Default</section>
+      </main>
+    `);
+    const instance = create(root, { themeTarget: '#header' });
+    const header = document.querySelector('#header');
+
+    expect(root.getAttribute('fs-theme')).toBe('dark');
+    expect(header.getAttribute('fs-theme')).toBe('dark');
+
+    await instance.next();
+    expect(root.getAttribute('fs-theme')).toBe('light');
+    expect(header.getAttribute('fs-theme')).toBe('light');
+
+    await instance.next();
+    expect(root.hasAttribute('fs-theme')).toBe(false);
+    expect(header.getAttribute('fs-theme')).toBe('default');
+
+    instance.destroy();
+    expect(header.getAttribute('fs-theme')).toBe('default');
+  });
+
+  it('progresses fs-step without changing the route or URL', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-anchor="story" fs-step="3">Story</section>
+        <section fs-anchor="next">Next</section>
+      </main>
+    `);
+    const instance = create(root, { history: true });
+    const story = instance.pages[0];
+    const changes = [];
+    root.addEventListener('fullscroll:stepchange', (event) => changes.push(event.detail));
+
+    expect(instance.state.currentStep).toBe(1);
+    expect(story.getAttribute('fs-step-current')).toBe('1');
+    await instance.next();
+    expect(instance.state.currentIndex).toBe(0);
+    expect(instance.state.currentStep).toBe(2);
+    expect(window.location.hash).toBe('');
+    await instance.next();
+    expect(story.getAttribute('fs-step-current')).toBe('3');
+    await instance.next();
+
+    expect(instance.state.current.anchor).toBe('next');
+    expect(story.hasAttribute('fs-step-current')).toBe(false);
+    expect(changes).toHaveLength(2);
+    expect(changes[0]).toMatchObject({ originStep: 1, destinationStep: 2, totalSteps: 3 });
+  });
+
+  it('applies global and per-section fs-step reentry policies', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-step="3" fs-step-reentry="first">First</section>
+        <section fs-step="2" fs-step-reentry="last">Last</section>
+        <section>End</section>
+      </main>
+    `);
+    const instance = create(root);
+
+    await instance.next();
+    await instance.next();
+    await instance.next();
+    expect(instance.state.current.pageIndex).toBe(1);
+    expect(instance.state.currentStep).toBe(2);
+
+    await instance.next();
+    await instance.prev();
+    expect(instance.state.current.pageIndex).toBe(1);
+    expect(instance.state.currentStep).toBe(2);
+
+    await instance.prev();
+    await instance.prev();
+    expect(instance.state.current.pageIndex).toBe(0);
+    expect(instance.state.currentStep).toBe(1);
+  });
+
+  it('plays fs-video media on entry and pauses it on exit', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-video><video></video></section>
+        <section fs-video><video></video></section>
+      </main>
+    `);
+    const videos = root.querySelectorAll('video');
+    const firstPlay = vi.fn(() => Promise.resolve());
+    const firstPause = vi.fn();
+    const secondPlay = vi.fn(() => Promise.resolve());
+    const secondPause = vi.fn();
+    Object.defineProperties(videos[0], { play: { configurable: true, value: firstPlay }, pause: { configurable: true, value: firstPause } });
+    Object.defineProperties(videos[1], { play: { configurable: true, value: secondPlay }, pause: { configurable: true, value: secondPause } });
+    const instance = create(root);
+
+    expect(firstPlay).toHaveBeenCalledOnce();
+    await instance.next();
+    expect(firstPause).toHaveBeenCalledOnce();
+    expect(secondPlay).toHaveBeenCalledOnce();
+
+    instance.destroy();
+    expect(secondPause).toHaveBeenCalledOnce();
+  });
+
+  it('lets fs-horizon-only skip horizontal slides for vertical movement', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-anchor="before">Before</section>
+        <section fs-horizon fs-horizon-only fs-anchor="only">
+          <article>Only 1</article><article>Only 2</article><article>Only 3</article>
+        </section>
+        <section fs-anchor="after">After</section>
+      </main>
+    `);
+    const instance = create(root);
+
+    await instance.next();
+    expect(instance.state.current.anchor).toBe('only');
+    expect(instance.state.current.slideIndex).toBe(0);
+    expect(instance.state.current.horizonOnly).toBe(true);
+
+    await instance.nextWithinHorizon('test');
+    expect(instance.state.current.slideIndex).toBe(1);
+
+    await instance.next();
+    expect(instance.state.current.anchor).toBe('after');
+
+    await instance.prev();
+    expect(instance.state.current.anchor).toBe('only');
+    expect(instance.state.current.slideIndex).toBe(0);
+
+    const target = instance.pages[1];
+    dispatchTouch(target, 'touchstart', { id: 4, x: 300, y: 300 });
+    dispatchTouch(target, 'touchend', { id: 4, x: 100, y: 300 });
+    await Promise.resolve();
+    expect(instance.state.current.slideIndex).toBe(1);
+  });
+
+  it('always enters fs-horizon-first on its first slide from another page', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-anchor="before">Before</section>
+        <section fs-horizon fs-horizon-first fs-anchor="first">
+          <article>First 1</article><article>First 2</article><article>First 3</article>
+        </section>
+        <section fs-anchor="after">After</section>
+      </main>
+    `);
+    const instance = create(root);
+
+    await instance.next();
+    await instance.nextWithinHorizon('test');
+    await instance.nextWithinHorizon('test');
+    expect(instance.state.current.slideIndex).toBe(2);
+
+    await instance.next();
+    expect(instance.state.current.anchor).toBe('after');
+    await instance.prev();
+    expect(instance.state.current.anchor).toBe('first');
+    expect(instance.state.current.slideIndex).toBe(0);
+    expect(instance.state.current.horizonFirst).toBe(true);
   });
 
   it('allows beforechange to cancel movement', async () => {

@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #101827; color: #fff; font-family: system-ui, sans-serif; }
+.panel { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 10vw; text-align: center; }
+.panel > div { max-width: 700px; }
+h1, h2 { margin: 0; font-size: clamp(42px, 8vw, 104px); letter-spacing: -.075em; }
+p { margin: 18px 0 0; font-size: clamp(16px, 2vw, 21px); line-height: 1.55; }
+code { padding: .12em .38em; border-radius: .35em; background: rgb(255 255 255 / 16%); font-size: .88em; }
+.demo-note { position: fixed; top: 16px; left: 50%; z-index: 40; max-width: min(92vw, 720px); margin: 0; padding: 9px 14px; border-radius: 999px; background: rgb(0 0 0 / 45%); font-size: 13px; transform: translateX(-50%); }
+.demo-note strong { color: #fef08a; }
+.demo-links { position: fixed; right: 18px; bottom: 18px; z-index: 40; margin: 0; padding: 8px 12px; border-radius: 999px; background: rgb(0 0 0 / 42%); font-size: 13px; }
+.demo-links a { color: #fff; text-underline-offset: .2em; }
+.blue { background: #4338ca; } .purple { background: #7c3aed; } .teal { background: #0f766e; } .sky { background: #0369a1; } .orange { background: #c2410c; } .slate { background: #1e293b; } .light { background: #f8fafc; color: #111827; }

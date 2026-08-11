@@ -7,14 +7,17 @@ var VERSION = "1.3.0";
 var INTERACTIVE_SELECTOR = 'input, textarea, select, option, button, [contenteditable="true"], [contenteditable=""]';
 var WHEEL_INTERACTIVE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
 var DEFAULTS = Object.freeze({
-  speed: 700,
-  easing: "cubic-bezier(0.25, 0.1, 0.25, 1)",
+  speed: 1200,
+  easing: "cubic-bezier(0.22, 1, 0.36, 1)",
   breakpoint: 0,
   wheelThreshold: 40,
   wheelIdle: 160,
   touchThreshold: 44,
   dots: false,
   history: true,
+  effect: null,
+  stepReentry: "preserve",
+  themeTarget: null,
   Swiper: null,
   verticalSwiper: {},
   horizontalSwiper: {}
@@ -284,36 +287,133 @@ function syncNavigation(root, horizons, route) {
   }
 }
 
+// src/effects.js
+var STATIC_EFFECTS = Object.freeze({
+  slide: { effect: "slide" },
+  fade: { effect: "fade", fadeEffect: { crossFade: true } },
+  zoom: {
+    effect: "creative",
+    creativeEffect: {
+      prev: { translate: [0, 0, -500], scale: 0.65, opacity: 0 },
+      next: { translate: [0, 0, -500], scale: 1.25, opacity: 0 }
+    }
+  }
+});
+var DIRECTIONAL_EFFECTS = /* @__PURE__ */ new Set(["creative", "depth", "layers"]);
+function translate(direction, offset, depth = 0) {
+  return direction === "vertical" ? [0, offset, depth] : [offset, 0, depth];
+}
+function directionalEffect(effect, direction) {
+  if (effect === "creative") {
+    return {
+      effect: "creative",
+      creativeEffect: {
+        prev: { translate: translate(direction, "-20%", -240), scale: 0.9, opacity: 0 },
+        next: { translate: translate(direction, "100%"), opacity: 0 }
+      }
+    };
+  }
+  if (effect === "depth") {
+    return {
+      effect: "creative",
+      creativeEffect: {
+        perspective: true,
+        prev: { translate: [0, 0, -800], scale: 0.78, opacity: 0 },
+        next: { translate: translate(direction, "100%"), opacity: 0 }
+      }
+    };
+  }
+  return {
+    effect: "creative",
+    creativeEffect: {
+      limitProgress: 2,
+      prev: { translate: translate(direction, "-110%", -260), rotate: [0, 0, -12], opacity: 0 },
+      next: { translate: translate(direction, "110%", -260), rotate: [0, 0, 12], opacity: 0 }
+    }
+  };
+}
+function isEffectName(value) {
+  return typeof value === "string" && (Object.hasOwn(STATIC_EFFECTS, value) || DIRECTIONAL_EFFECTS.has(value));
+}
+function resolveEffect(value, fallback = "slide") {
+  return isEffectName(value) ? value : fallback;
+}
+function effectOptions(name, direction = "horizontal") {
+  const effect = resolveEffect(name);
+  return DIRECTIONAL_EFFECTS.has(effect) ? directionalEffect(effect, direction) : STATIC_EFFECTS[effect];
+}
+var EFFECT_NAMES = Object.freeze([...Object.keys(STATIC_EFFECTS), ...DIRECTIONAL_EFFECTS]);
+
 // src/routes.js
 var FLOW_RELATIONS = /* @__PURE__ */ new Set(["prev", "next"]);
+var STEP_REENTRIES = /* @__PURE__ */ new Set(["preserve", "first", "last"]);
+function readEffect(element, warn) {
+  const effect = element.getAttribute("fs-effect")?.trim().toLowerCase() || null;
+  if (!effect) return null;
+  if (isEffectName(effect)) return effect;
+  warn(`[fs-effect]\uB294 ${EFFECT_NAMES.join(", ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
+  return null;
+}
 function readFlowSettings(element, warn, { allowRelations = true } = {}) {
   const flow = element.hasAttribute("fs-flow");
   const settings = {
     flow,
-    flowEnterWith: null,
-    flowExitWith: null
+    flowEnterSide: null,
+    flowExitSide: null
   };
-  for (const [attribute, key] of [
-    ["fs-flow-enter", "flowEnterWith"],
-    ["fs-flow-exit", "flowExitWith"]
-  ]) {
-    const value = element.getAttribute(attribute)?.trim().toLowerCase() || null;
-    if (!value) continue;
-    if (!flow) {
-      warn(`[${attribute}]\uC740 fs-flow\uAC00 \uBD99\uC740 \uC694\uC18C\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
-      continue;
+  const rawValue = element.getAttribute("fs-flow")?.trim().toLowerCase() || "";
+  if (!rawValue) return settings;
+  if (!allowRelations) {
+    warn("fs-flow\uC758 \uBC29\uD5A5\uAC12\uC740 fs-horizon\uC758 \uC9C1\uACC4 fs-flow \uC2AC\uB77C\uC774\uB4DC\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+    return settings;
+  }
+  const sides = rawValue.split(",").map((value) => value.trim());
+  if (sides.length > 2 || sides.some((value) => value && !FLOW_RELATIONS.has(value))) {
+    warn("fs-flow\uC5D0\uB294 prev, next \uB610\uB294 prev,next \uD615\uC2DD\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+    return settings;
+  }
+  settings.flowEnterSide = sides[0] || null;
+  settings.flowExitSide = sides[1] || null;
+  return settings;
+}
+function readStepSettings(element, warn) {
+  const rawSteps = element.getAttribute("fs-step");
+  const rawReentry = element.getAttribute("fs-step-reentry")?.trim().toLowerCase() || null;
+  const settings = { stepMax: 0, stepReentry: null };
+  if (rawSteps !== null) {
+    const stepMax = Number.parseInt(rawSteps, 10);
+    if (!Number.isInteger(stepMax) || stepMax < 2 || String(stepMax) !== rawSteps.trim()) {
+      warn("fs-step\uC740 2 \uC774\uC0C1\uC758 \uC815\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+    } else {
+      settings.stepMax = stepMax;
     }
-    if (!allowRelations) {
-      warn(`${attribute}\uC740 fs-horizon\uC758 \uC9C1\uACC4 fs-flow \uC2AC\uB77C\uC774\uB4DC\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
-      continue;
+  }
+  if (rawReentry) {
+    if (!STEP_REENTRIES.has(rawReentry)) {
+      warn("fs-step-reentry\uB294 preserve, first, last \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+    } else {
+      settings.stepReentry = rawReentry;
     }
-    if (!FLOW_RELATIONS.has(value)) {
-      warn(`${attribute}\uC5D0\uB294 prev \uB610\uB294 next\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
-      continue;
-    }
-    settings[key] = value;
   }
   return settings;
+}
+function createRoute({ routes, page, pageIndex, slide = null, slideIndex = null, anchor, horizon, warn }) {
+  const flow = readFlowSettings(slide ?? page, warn, { allowRelations: slide !== null });
+  const step = readStepSettings(slide ?? page, warn);
+  return {
+    index: routes.length,
+    page,
+    pageIndex,
+    slide,
+    slideIndex,
+    anchor,
+    horizonOnly: horizon?.only ?? false,
+    horizonFirst: horizon?.first ?? false,
+    stepElement: step.stepMax ? slide ?? page : null,
+    ...step,
+    mediaElement: (slide ?? page).hasAttribute("fs-video") ? slide ?? page : null,
+    ...flow
+  };
 }
 function scanRoutes(root, warn) {
   const pages = getDirectPages(root);
@@ -344,41 +444,33 @@ function scanRoutes(root, warn) {
         "fs-flow\uB294 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
       );
     }
+    if (page.hasAttribute("fs-step") && isHorizon) {
+      warn("fs-step\uC740 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
+    }
     if (page.hasAttribute("fs-horizon") && !isHorizon) {
       warn(`\uAC00\uB85C \uADF8\uB8F9 ${pageIndex + 1}\uC5D0 \uC2AC\uB77C\uC774\uB4DC\uAC00 2\uAC1C \uC774\uC0C1 \uD544\uC694\uD569\uB2C8\uB2E4.`);
     }
     if (!isHorizon) {
-      const flow = readFlowSettings(page, warn, { allowRelations: false });
-      routes.push({
-        index: routes.length,
-        page,
-        pageIndex,
-        slide: null,
-        slideIndex: null,
-        anchor,
-        ...flow
-      });
+      routes.push(createRoute({ routes, page, pageIndex, anchor, warn }));
       return;
     }
-    horizons.set(pageIndex, {
+    const horizon = {
       page,
       pageIndex,
       slides,
       wrapper: null,
       swiper: null,
-      nav: null
-    });
+      nav: null,
+      routes: [],
+      effect: readEffect(page, warn),
+      only: page.hasAttribute("fs-horizon-only"),
+      first: page.hasAttribute("fs-horizon-first")
+    };
+    horizons.set(pageIndex, horizon);
     slides.forEach((slide, slideIndex) => {
-      const flow = readFlowSettings(slide, warn);
-      routes.push({
-        index: routes.length,
-        page,
-        pageIndex,
-        slide,
-        slideIndex,
-        anchor,
-        ...flow
-      });
+      const route = createRoute({ routes, page, pageIndex, slide, slideIndex, anchor, horizon, warn });
+      routes.push(route);
+      horizon.routes.push(route);
     });
   });
   return { pages, routes, anchorMap, horizons };
@@ -415,8 +507,12 @@ function toPublicRoute(route) {
     page: route.page,
     slide: route.slide,
     flow: route.flow,
-    flowEnterWith: route.flowEnterWith,
-    flowExitWith: route.flowExitWith
+    flowEnterSide: route.flowEnterSide,
+    flowExitSide: route.flowExitSide,
+    horizonOnly: route.horizonOnly,
+    horizonFirst: route.horizonFirst,
+    stepMax: route.stepMax,
+    stepReentry: route.stepReentry
   });
 }
 
@@ -431,20 +527,25 @@ function readSlideMetrics(horizon, slideIndex) {
   const size = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : slide.offsetWidth;
   return { slide, start, size };
 }
-function resolveFlowView({ horizon, origin, destination, currentIndex, nextIndex }) {
-  if (!horizon?.swiper || origin.pageIndex !== destination.pageIndex || origin.slideIndex === null || destination.slideIndex === null || Math.abs(nextIndex - currentIndex) !== 1) {
-    return null;
+function resolveRelation(horizon, destination) {
+  if (destination.flow && destination.flowEnterSide) {
+    return { flowRoute: destination, relation: destination.flowEnterSide };
   }
-  const movingForward = nextIndex > currentIndex;
-  const destinationRelation = destination.flow ? destination.flowEnterWith : null;
-  const originRelation = origin.flow ? origin.flowExitWith : null;
-  const destinationCompanionIndex = destinationRelation ? destination.slideIndex + (destinationRelation === "prev" ? -1 : 1) : null;
-  const originCompanionIndex = originRelation ? origin.slideIndex + (originRelation === "prev" ? -1 : 1) : null;
-  const canUseDestinationRelation = destinationRelation && (movingForward || destinationCompanionIndex === origin.slideIndex);
-  const canUseOriginRelation = originRelation && originCompanionIndex === destination.slideIndex;
-  const relation = canUseDestinationRelation ? destinationRelation : canUseOriginRelation ? originRelation : null;
-  if (!relation) return null;
-  const flowRoute = canUseDestinationRelation ? destination : origin;
+  const previousRoute = horizon.routes[destination.slideIndex - 1] ?? null;
+  if (previousRoute?.flowExitSide === "next") {
+    return { flowRoute: previousRoute, relation: "next" };
+  }
+  const nextRoute = horizon.routes[destination.slideIndex + 1] ?? null;
+  if (nextRoute?.flowExitSide === "prev") {
+    return { flowRoute: nextRoute, relation: "prev" };
+  }
+  return null;
+}
+function resolveFlowView({ horizon, destination }) {
+  if (!horizon?.swiper || destination.slideIndex === null) return null;
+  const relationView = resolveRelation(horizon, destination);
+  if (!relationView) return null;
+  const { flowRoute, relation } = relationView;
   const metrics = readSlideMetrics(horizon, flowRoute.slideIndex);
   const companionIndex = flowRoute.slideIndex + (relation === "prev" ? -1 : 1);
   const companion = horizon.slides[companionIndex] ?? null;
@@ -460,6 +561,43 @@ function resolveFlowView({ horizon, origin, destination, currentIndex, nextIndex
     flowSlide: metrics.slide,
     companion
   };
+}
+
+// src/media.js
+function iframeCommand(iframe, command) {
+  const source = iframe.getAttribute("src") || "";
+  if (!source) return;
+  if (source.includes("player.vimeo.com")) {
+    iframe.contentWindow?.postMessage({ method: command }, "*");
+    return;
+  }
+  if (source.includes("youtube.com") || source.includes("youtu.be")) {
+    iframe.contentWindow?.postMessage(
+      JSON.stringify({ event: "command", func: command === "play" ? "playVideo" : "pauseVideo", args: "" }),
+      "*"
+    );
+  }
+}
+function forEachRouteMedia(element, callback) {
+  if (!element) return;
+  element.querySelectorAll("video").forEach((video) => callback(video, "video"));
+  element.querySelectorAll("iframe").forEach((iframe) => callback(iframe, "iframe"));
+}
+function playRouteMedia(element) {
+  forEachRouteMedia(element, (media, type) => {
+    if (type === "iframe") {
+      iframeCommand(media, "play");
+      return;
+    }
+    media.play?.()?.catch?.(() => {
+    });
+  });
+}
+function pauseRouteMedia(element) {
+  forEachRouteMedia(element, (media, type) => {
+    if (type === "iframe") iframeCommand(media, "pause");
+    else media.pause?.();
+  });
 }
 
 // src/scroll.js
@@ -564,6 +702,11 @@ var FullScroll = class {
     this.controls = null;
     this.snapshots = /* @__PURE__ */ new Map();
     this.generatedNodes = [];
+    this.themeTargets = [];
+    this.themeSnapshots = /* @__PURE__ */ new Map();
+    this.stepStates = /* @__PURE__ */ new WeakMap();
+    this.stepElement = null;
+    this.activeMediaElement = null;
     this.readyOnce = false;
     this.wheelAccumulator = 0;
     this.wheelDirection = 0;
@@ -593,8 +736,9 @@ var FullScroll = class {
     this.captureSnapshots();
     this.scan();
     this.setupControls();
+    this.setupThemeTargets();
     const locationIndex = this.routeIndexFromLocation();
-    this.currentIndex = locationIndex ?? 0;
+    this.currentIndex = this.normalizeHorizonEntry(locationIndex ?? 0);
     window.addEventListener("resize", this.onResize, { passive: true });
     window.addEventListener("orientationchange", this.onResize, { passive: true });
     window.addEventListener("popstate", this.onLocationChange);
@@ -611,6 +755,7 @@ var FullScroll = class {
     }
   }
   get state() {
+    const step = this.currentStepInfo();
     return Object.freeze({
       version: VERSION,
       active: this.active,
@@ -618,6 +763,8 @@ var FullScroll = class {
       moving: this.moving,
       currentIndex: this.currentIndex,
       total: this.routes.length,
+      currentStep: step?.current ?? 1,
+      totalSteps: step?.max ?? 1,
       current: this.publicRoute(this.routes[this.currentIndex])
     });
   }
@@ -642,6 +789,13 @@ var FullScroll = class {
     this.anchorMap = structure.anchorMap;
     this.horizons = structure.horizons;
   }
+  readEffect(attributeValue, fallback) {
+    const requested = attributeValue?.trim().toLowerCase() || fallback;
+    if (!requested) return "slide";
+    if (isEffectName(requested)) return requested;
+    this.warn(`effect\uB294 ${EFFECT_NAMES.join(", ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
+    return "slide";
+  }
   setupControls() {
     this.controls?.destroy();
     this.controls = createControls({
@@ -655,6 +809,31 @@ var FullScroll = class {
       onMove: (routeIndex) => this.goToRoute(routeIndex, { trigger: "control" }),
       warn: (message) => this.warn(message)
     });
+  }
+  setupThemeTargets() {
+    this.restoreThemeTargets();
+    if (!this.options.themeTarget) return;
+    if (typeof this.options.themeTarget !== "string") {
+      this.warn("themeTarget\uC740 \uD5E4\uB354 \uC694\uC18C\uB97C \uCC3E\uB294 CSS \uC120\uD0DD\uC790 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
+      return;
+    }
+    try {
+      this.themeTargets = Array.from(document.querySelectorAll(this.options.themeTarget));
+    } catch {
+      this.warn(`themeTarget \uC120\uD0DD\uC790\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4: ${this.options.themeTarget}`);
+      return;
+    }
+    this.themeTargets.forEach((target) => {
+      this.themeSnapshots.set(target, target.getAttribute("fs-theme"));
+    });
+  }
+  restoreThemeTargets() {
+    this.themeSnapshots.forEach((theme, target) => {
+      if (theme === null) target.removeAttribute("fs-theme");
+      else target.setAttribute("fs-theme", theme);
+    });
+    this.themeTargets = [];
+    this.themeSnapshots.clear();
   }
   syncControls() {
     this.controls?.sync({
@@ -672,7 +851,7 @@ var FullScroll = class {
     if (rescan) {
       this.scan();
     }
-    this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
+    this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
     const currentRoute = this.routes[this.currentIndex];
     const runtime = {
       rootWrapper: document.createElement("div"),
@@ -695,6 +874,15 @@ var FullScroll = class {
     this.root.style.setProperty("--fs-easing", this.options.easing);
     this.root.setAttribute("fs-ready", "");
     const hasFlowPage = this.pages.some((page) => page.hasAttribute("fs-flow"));
+    const rootAttributeEffect = this.root.getAttribute("fs-effect");
+    const rootEffect = this.readEffect(
+      rootAttributeEffect,
+      this.options.effect ?? this.options.verticalSwiper.effect
+    );
+    const horizontalEffect = this.readEffect(
+      rootAttributeEffect,
+      this.options.effect ?? this.options.horizontalSwiper.effect
+    );
     try {
       for (const horizon of this.horizons.values()) {
         const wrapper = document.createElement("div");
@@ -711,9 +899,11 @@ var FullScroll = class {
         });
         horizon.page.classList.add("swiper", "fs-horizon-runtime");
         const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute("fs-flow"));
+        const effect = hasFlowSlide ? "slide" : horizon.effect ?? horizontalEffect;
         const initialSlide = currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null ? currentRoute.slideIndex : 0;
         horizon.swiper = new this.Swiper(horizon.page, {
           ...this.options.horizontalSwiper,
+          ...effectOptions(effect, "horizontal"),
           direction: "horizontal",
           slidesPerView: hasFlowSlide ? "auto" : 1,
           ...hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
@@ -731,6 +921,7 @@ var FullScroll = class {
       }
       this.rootSwiper = new this.Swiper(this.root, {
         ...this.options.verticalSwiper,
+        ...effectOptions(hasFlowPage ? "slide" : rootEffect, "vertical"),
         direction: "vertical",
         slidesPerView: hasFlowPage ? "auto" : 1,
         ...hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
@@ -748,6 +939,14 @@ var FullScroll = class {
       throw error;
     }
     this.active = true;
+    if (currentRoute.slideIndex !== null) {
+      const horizon = this.horizons.get(currentRoute.pageIndex);
+      const flowView = resolveFlowView({ horizon, destination: currentRoute });
+      if (flowView) {
+        horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+        this.flowView = flowView;
+      }
+    }
     this.installRuntimeListeners();
     this.buildNavigation();
     this.syncState();
@@ -807,6 +1006,7 @@ var FullScroll = class {
     this.active = false;
     this.moving = false;
     this.flowView = null;
+    this.syncMedia(null);
     this.pointer = null;
     this.touch = null;
   }
@@ -836,7 +1036,7 @@ var FullScroll = class {
     if (this.destroyed || this.moving || this.routes.length === 0) {
       return false;
     }
-    const nextIndex = clamp(targetIndex, 0, this.routes.length - 1);
+    const nextIndex = this.normalizeHorizonEntry(targetIndex);
     if (nextIndex === this.currentIndex) {
       return false;
     }
@@ -872,25 +1072,25 @@ var FullScroll = class {
     try {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
-        const flowView = resolveFlowView({
-          horizon,
-          origin,
-          destination,
-          currentIndex: this.currentIndex,
-          nextIndex
-        });
-        await this.transitionTo(
+        const flowView = resolveFlowView({ horizon, destination });
+        const transition = this.transitionTo(
           horizon.swiper,
           destination.slideIndex,
           duration,
           flowView?.offset ?? null
         );
+        await transition;
         this.flowView = flowView;
       } else {
         this.flowView = null;
         if (destination.slideIndex !== null) {
           const horizon = this.horizons.get(destination.pageIndex);
+          const flowView = resolveFlowView({ horizon, destination });
           horizon.swiper.slideTo(destination.slideIndex, 0, false);
+          if (flowView) {
+            horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+            this.flowView = flowView;
+          }
         }
         await this.transitionTo(this.rootSwiper, destination.pageIndex, duration);
       }
@@ -898,6 +1098,7 @@ var FullScroll = class {
         return false;
       }
       this.currentIndex = nextIndex;
+      this.applyStepEntry(destination, origin);
       this.syncState();
       resetRouteScroll(origin);
       if (updateHistory) {
@@ -940,9 +1141,9 @@ var FullScroll = class {
     });
   }
   transitionToTranslate(swiper, offset, duration) {
-    const translate = -offset;
+    const translate2 = -offset;
     if (duration === 0) {
-      swiper.translateTo(translate, 0, false, false);
+      swiper.translateTo(translate2, 0, false, false);
       return Promise.resolve();
     }
     return new Promise((resolve) => {
@@ -956,14 +1157,76 @@ var FullScroll = class {
       };
       const fallback = setTimeout(finish, duration + 180);
       swiper.once?.("transitionEnd", finish);
-      swiper.translateTo(translate, duration, true, false);
+      swiper.translateTo(translate2, duration, true, false);
     });
   }
   next(options = {}) {
-    return this.goToRoute(this.currentIndex + 1, options);
+    const step = this.currentStepInfo();
+    if (step && step.current < step.max) {
+      return this.goToStep(step.current + 1, options);
+    }
+    return this.goToRoute(this.verticalTargetIndex("next"), options);
   }
   prev(options = {}) {
-    return this.goToRoute(this.currentIndex - 1, options);
+    const step = this.currentStepInfo();
+    if (step && step.current > 1) {
+      return this.goToStep(step.current - 1, options);
+    }
+    return this.goToRoute(this.verticalTargetIndex("prev"), options);
+  }
+  currentStepInfo(route = this.routes[this.currentIndex]) {
+    if (!route?.stepElement || route.stepMax < 2) return null;
+    const current = clamp(this.stepStates.get(route.stepElement) ?? 1, 1, route.stepMax);
+    return { element: route.stepElement, current, max: route.stepMax, reentry: route.stepReentry ?? this.options.stepReentry };
+  }
+  applyStepEntry(destination, origin) {
+    const step = this.currentStepInfo(destination);
+    if (!step || step.element === origin?.stepElement) return;
+    if (step.reentry === "first") this.stepStates.set(step.element, 1);
+    else if (step.reentry === "last") this.stepStates.set(step.element, step.max);
+    else if (!this.stepStates.has(step.element)) this.stepStates.set(step.element, 1);
+  }
+  goToStep(targetStep, { trigger = "api" } = {}) {
+    if (this.destroyed || !this.active || this.moving) return Promise.resolve(false);
+    const step = this.currentStepInfo();
+    if (!step) return Promise.resolve(false);
+    const nextStep = clamp(targetStep, 1, step.max);
+    if (nextStep === step.current) return Promise.resolve(false);
+    const detail = {
+      current: this.publicRoute(this.routes[this.currentIndex]),
+      originStep: step.current,
+      destinationStep: nextStep,
+      totalSteps: step.max,
+      direction: nextStep > step.current ? "next" : "prev",
+      trigger
+    };
+    if (!this.emit("beforestepchange", detail, true)) return Promise.resolve(false);
+    this.stepStates.set(step.element, nextStep);
+    this.syncState();
+    this.emit("stepchange", detail);
+    return Promise.resolve(true);
+  }
+  verticalTargetIndex(direction) {
+    const current = this.routes[this.currentIndex];
+    const horizon = current ? this.horizons.get(current.pageIndex) : null;
+    if (!horizon?.only) {
+      return this.currentIndex + (direction === "next" ? 1 : -1);
+    }
+    const pageIndex = current.pageIndex + (direction === "next" ? 1 : -1);
+    return this.firstRouteIndexForPage(pageIndex) ?? this.currentIndex;
+  }
+  firstRouteIndexForPage(pageIndex) {
+    return this.routes.find((route) => route.pageIndex === pageIndex)?.index ?? null;
+  }
+  normalizeHorizonEntry(targetIndex) {
+    const index = clamp(targetIndex, 0, this.routes.length - 1);
+    const destination = this.routes[index];
+    const horizon = destination ? this.horizons.get(destination.pageIndex) : null;
+    const origin = this.routes[this.currentIndex];
+    if (!horizon || !horizon.only && !horizon.first || origin?.pageIndex === destination.pageIndex) {
+      return index;
+    }
+    return this.firstRouteIndexForPage(destination.pageIndex) ?? index;
   }
   moveTo(target, slideIndex = 0, options = {}) {
     let pageIndex = null;
@@ -1151,11 +1414,15 @@ var FullScroll = class {
         return;
       }
     }
-    if (direction > 0) {
-      this.next({ trigger: "touch" });
-    } else {
-      this.prev({ trigger: "touch" });
+    const current = this.routes[this.currentIndex];
+    const horizon = current ? this.horizons.get(current.pageIndex) : null;
+    if (!verticalGesture && horizon?.only) {
+      if (direction > 0) this.nextWithinHorizon("touch");
+      else this.prevWithinHorizon("touch");
+      return;
     }
+    if (direction > 0) this.next({ trigger: "touch" });
+    else this.prev({ trigger: "touch" });
   }
   onResize() {
     clearTimeout(this.resizeTimer);
@@ -1283,9 +1550,43 @@ var FullScroll = class {
     const viewName = route.anchor ?? String(route.pageIndex + 1);
     const view = route.slideIndex === null ? viewName : `${viewName}/${route.slideIndex + 1}`;
     this.root.setAttribute("fs-view", view);
+    this.syncStep(route);
+    this.syncTheme(route);
+    this.syncMedia(route);
     this.syncAccessibility(route);
     syncNavigation(this.root, this.horizons, route);
     this.syncControls();
+  }
+  syncStep(route) {
+    if (this.stepElement && this.stepElement !== route.stepElement) {
+      this.stepElement.removeAttribute("fs-step-current");
+    }
+    const step = this.currentStepInfo(route);
+    this.stepElement = step?.element ?? null;
+    if (step) step.element.setAttribute("fs-step-current", String(step.current));
+  }
+  syncMedia(route) {
+    const nextElement = route?.mediaElement ?? null;
+    if (nextElement === this.activeMediaElement) return;
+    pauseRouteMedia(this.activeMediaElement);
+    this.activeMediaElement = nextElement;
+    playRouteMedia(nextElement);
+  }
+  syncTheme(route) {
+    const theme = route.slide?.getAttribute("fs-theme") ?? route.page.getAttribute("fs-theme");
+    const targets = [this.root, ...this.themeTargets];
+    targets.forEach((target) => {
+      if (theme === null) {
+        if (target === this.root) target.removeAttribute("fs-theme");
+        else {
+          const originalTheme = this.themeSnapshots.get(target);
+          if (originalTheme === null) target.removeAttribute("fs-theme");
+          else target.setAttribute("fs-theme", originalTheme);
+        }
+      } else {
+        target.setAttribute("fs-theme", theme);
+      }
+    });
   }
   syncAccessibility(route) {
     const visibleSlides = /* @__PURE__ */ new Set([route.slide]);
@@ -1362,7 +1663,8 @@ var FullScroll = class {
     this.captureSnapshots();
     this.scan();
     this.setupControls();
-    this.currentIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
+    this.setupThemeTargets();
+    this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
     if (wasActive && !this.shouldUseResponsiveMode() && !this.manualDisabled) {
       this.enableRuntime();
     } else {
@@ -1384,6 +1686,9 @@ var FullScroll = class {
     this.root.removeAttribute("fs-disabled");
     this.controls?.destroy();
     this.controls = null;
+    this.restoreThemeTargets();
+    this.stepElement?.removeAttribute("fs-step-current");
+    this.stepElement = null;
     this.destroyed = true;
     INSTANCES.delete(this.root);
     this.emit("destroy", {});

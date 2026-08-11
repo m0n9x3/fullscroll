@@ -13,48 +13,39 @@ function readSlideMetrics(horizon, slideIndex) {
   return { slide, start, size };
 }
 
-export function resolveFlowView({ horizon, origin, destination, currentIndex, nextIndex }) {
-  if (
-    !horizon?.swiper ||
-    origin.pageIndex !== destination.pageIndex ||
-    origin.slideIndex === null ||
-    destination.slideIndex === null ||
-    Math.abs(nextIndex - currentIndex) !== 1
-  ) {
-    return null;
+function resolveRelation(horizon, destination) {
+  if (destination.flow && destination.flowEnterSide) {
+    return { flowRoute: destination, relation: destination.flowEnterSide };
   }
 
-  const movingForward = nextIndex > currentIndex;
-  const destinationRelation = destination.flow ? destination.flowEnterWith : null;
-  const originRelation = origin.flow ? origin.flowExitWith : null;
-  const destinationCompanionIndex = destinationRelation
-    ? destination.slideIndex + (destinationRelation === 'prev' ? -1 : 1)
-    : null;
-  const originCompanionIndex = originRelation
-    ? origin.slideIndex + (originRelation === 'prev' ? -1 : 1)
-    : null;
-  const canUseDestinationRelation =
-    destinationRelation &&
-    (movingForward || destinationCompanionIndex === origin.slideIndex);
-  const canUseOriginRelation = originRelation && originCompanionIndex === destination.slideIndex;
-  const relation = canUseDestinationRelation
-    ? destinationRelation
-    : canUseOriginRelation
-      ? originRelation
-      : null;
-  if (!relation) return null;
+  const previousRoute = horizon.routes[destination.slideIndex - 1] ?? null;
+  if (previousRoute?.flowExitSide === 'next') {
+    return { flowRoute: previousRoute, relation: 'next' };
+  }
 
-  const flowRoute = canUseDestinationRelation ? destination : origin;
+  const nextRoute = horizon.routes[destination.slideIndex + 1] ?? null;
+  if (nextRoute?.flowExitSide === 'prev') {
+    return { flowRoute: nextRoute, relation: 'prev' };
+  }
+
+  return null;
+}
+
+/** A Flow viewport is fixed to its destination route, not its travel direction. */
+export function resolveFlowView({ horizon, destination }) {
+  if (!horizon?.swiper || destination.slideIndex === null) return null;
+
+  const relationView = resolveRelation(horizon, destination);
+  if (!relationView) return null;
+
+  const { flowRoute, relation } = relationView;
   const metrics = readSlideMetrics(horizon, flowRoute.slideIndex);
   const companionIndex = flowRoute.slideIndex + (relation === 'prev' ? -1 : 1);
   const companion = horizon.slides[companionIndex] ?? null;
   const viewportSize = horizon.page.clientWidth || horizon.swiper.width || 0;
   if (!metrics || !viewportSize || !metrics.size || !companion) return null;
 
-  const rawOffset =
-    relation === 'prev'
-      ? metrics.start + metrics.size - viewportSize
-      : metrics.start;
+  const rawOffset = relation === 'prev' ? metrics.start + metrics.size - viewportSize : metrics.start;
   const maxTranslate = Number(horizon.swiper.maxTranslate?.());
   const lastMetrics = readSlideMetrics(horizon, horizon.slides.length - 1);
   const maximum = Number.isFinite(maxTranslate)

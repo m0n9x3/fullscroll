@@ -11,6 +11,9 @@ const options: FullScrollOptions = {
   breakpoint: 720,
   dots: true,
   history: true,
+  effect: 'depth',
+  stepReentry: 'preserve',
+  themeTarget: '#header, .quick',
   verticalSwiper: { speed: 500 },
   horizontalSwiper: { effect: 'slide' },
 };

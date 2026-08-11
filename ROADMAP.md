@@ -33,11 +33,14 @@
 - 기본 위치 유지와 `[fs-scroll-reset]` 예외
 - 모바일 관성 스크롤 및 고정 UI용 뷰포트 오프셋
 
-### 1.3.0 — 자연 크기 예외
+### 1.3.0 — 자연 크기와 화면 연출
 
 - `[fs-flow]` 세로 페이지 자연 높이
 - 가로 직계 `[fs-flow]` 슬라이드만 자연 너비
-- `[fs-flow-enter]`·`[fs-flow-exit]` 방향별 인접 슬라이드 구성
+- `[fs-flow="prev,next"]` 경로별 고정 인접 슬라이드 구성
+- `[fs-horizon-only]`, `[fs-horizon-first]` 가로 그룹 이동 규칙
+- `slide`, `fade`, `creative`, `depth`, `layers`, `zoom` 전환 효과
+- `[fs-theme]`, `[fs-step]`, `[fs-video]` 활성 경로 상태 연동
 - 자연 크기 슬라이드가 함께 보일 때의 접근성 상태 동기화
 
 ## 1.3.x — 현장 안정화

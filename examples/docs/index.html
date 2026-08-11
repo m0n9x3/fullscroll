@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll Demos</title>
+    <style>
+      :root { --bg: #fff; --ink: #101828; --muted: #667085; --line: #e4e7ec; --soft: #f8fafc; --accent: #4f46e5; --radius: 18px; }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      a { color: inherit; }
+      .site-head { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--line); background: rgb(255 255 255 / 92%); backdrop-filter: blur(14px); }
+      .head-inner, main { width: min(1180px, calc(100% - 40px)); margin: auto; }
+      .head-inner { display: flex; align-items: center; justify-content: space-between; min-height: 64px; gap: 20px; }
+      .brand { font-size: 20px; font-weight: 850; letter-spacing: -.06em; text-decoration: none; }
+      .brand span { color: var(--accent); }
+      .top-links { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 14px; }
+      .top-links a { text-decoration: none; }
+      .top-links a:hover { color: var(--accent); }
+      main { padding: 72px 0 100px; }
+      .hero { max-width: 750px; margin-bottom: 76px; }
+      .eyebrow { margin: 0 0 10px; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 16px; font-size: clamp(40px, 6vw, 70px); line-height: 1.05; letter-spacing: -.075em; }
+      h2 { margin-bottom: 8px; font-size: 29px; letter-spacing: -.055em; }
+      h3 { margin-bottom: 5px; font-size: 18px; letter-spacing: -.035em; }
+      .lead { margin-bottom: 0; color: var(--muted); font-size: 18px; }
+      .start { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(290px, .65fr); gap: 18px; margin-bottom: 80px; }
+      .start-copy, .checklist { padding: 26px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--soft); }
+      .start-copy p, .checklist li { color: var(--muted); }
+      .checklist ul { display: grid; gap: 10px; margin: 16px 0 0; padding: 0; list-style: none; }
+      .checklist li::before { content: '✓'; display: inline-grid; width: 20px; height: 20px; margin-right: 8px; border-radius: 50%; place-items: center; background: #e0e7ff; color: #3730a3; font-size: 12px; font-weight: 900; }
+      pre { overflow: auto; margin: 18px 0 0; padding: 16px; border-radius: 12px; background: #172033; color: #e6ecff; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      code { padding: .12em .34em; border-radius: .35em; background: #eef2ff; color: #3730a3; font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      pre code { padding: 0; background: none; color: inherit; }
+      .catalog { scroll-margin-top: 88px; }
+      .category { padding-top: 52px; margin-top: 52px; border-top: 1px solid var(--line); }
+      .category:first-child { padding-top: 0; margin-top: 0; border-top: 0; }
+      .category-head { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
+      .category-head p { max-width: 620px; margin: 0; color: var(--muted); }
+      .count { flex: 0 0 auto; color: var(--muted); font-size: 13px; }
+      .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+      .demo-card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 4px 18px rgb(16 24 40 / 4%); }
+      .visual { position: relative; display: grid; min-height: 178px; overflow: hidden; place-items: center; padding: 22px; color: #fff; font-weight: 800; letter-spacing: -.05em; }
+      .visual::before, .visual::after { position: absolute; content: ''; border-radius: 999px; opacity: .76; }
+      .visual-basic { background: linear-gradient(135deg, #4f46e5, #8b5cf6); } .visual-basic::before { width: 130px; height: 130px; background: #fff; transform: translate(-65px, 28px); } .visual-basic::after { width: 180px; height: 180px; border: 28px solid rgb(255 255 255 / 45%); transform: translate(94px, -48px); }
+      .visual-flow { background: #dba924; color: #1d2939; } .visual-flow::before { width: 210px; height: 108px; border-radius: 14px; background: #fff4c7; transform: translate(-50px, 0); } .visual-flow::after { width: 54px; height: 108px; border-radius: 14px; background: #fff; transform: translate(86px, 0); }
+      .visual-effect { background: linear-gradient(125deg, #172554, #0f766e); } .visual-effect::before { width: 115px; height: 132px; border-radius: 12px; background: #06b6d4; transform: rotate(-12deg) translate(-45px, 7px); } .visual-effect::after { width: 115px; height: 132px; border-radius: 12px; background: #818cf8; transform: rotate(12deg) translate(45px, -7px); }
+      .visual-options { background: #334155; } .visual-options::before { width: 65%; height: 58px; border-radius: 10px; background: #fda4af; transform: translateY(-35px); } .visual-options::after { width: 65%; height: 58px; border-radius: 10px; background: #fbbf24; transform: translateY(35px); }
+      .visual-theme { background: linear-gradient(90deg, #111827 0 50%, #f8fafc 50%); color: #111827; } .visual-theme::before { width: 190px; height: 42px; border-radius: 999px; background: #fff; box-shadow: 0 2px 12px rgb(0 0 0 / 18%); }
+      .visual-step { background: #4338ca; } .visual-step::before { width: 42px; height: 42px; background: #c7d2fe; transform: translate(-62px, 0); } .visual-step::after { width: 42px; height: 42px; background: #fff; box-shadow: 62px 0 0 #818cf8; }
+      .visual-video { background: #0f766e; } .visual-video::before { width: 116px; height: 82px; border-radius: 14px; background: #99f6e4; } .visual-video::after { border-top: 14px solid transparent; border-bottom: 14px solid transparent; border-left: 21px solid #0f766e; transform: translate(4px, 0); }
+      .visual-controls { background: #1d4ed8; } .visual-controls::before { width: 48px; height: 48px; background: #fff; box-shadow: 100px 0 0 #fff; transform: translateX(-50px); } .visual-controls::after { width: 86px; height: 8px; background: #bfdbfe; transform: translateY(58px); }
+      .visual-scroll { background: #0f172a; } .visual-scroll::before { width: 120px; height: 130px; border: 1px solid #64748b; border-radius: 12px; background: repeating-linear-gradient(#1e293b 0 16px, #334155 16px 20px); } .visual-scroll::after { width: 4px; height: 62px; background: #94a3b8; transform: translate(48px, 0); }
+      .visual .label { position: relative; z-index: 1; padding: 7px 11px; border-radius: 999px; background: rgb(15 23 42 / 30%); color: inherit; font-size: 14px; }
+      .card-body { padding: 20px; }
+      .card-body p { min-height: 48px; margin-bottom: 16px; color: var(--muted); font-size: 14px; }
+      .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+      .tags code { font-size: 11px; }
+      .card-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .preview-link { display: inline-flex; align-items: center; min-height: 36px; padding: 7px 11px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 750; text-decoration: none; }
+      .preview-link:hover { background: #3730a3; }
+      details { margin-top: 14px; border-top: 1px solid var(--line); }
+      summary { padding-top: 13px; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 700; }
+      details pre { margin: 12px 0 0; }
+      .api { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; }
+      .api > div { padding: 22px; border: 1px solid var(--line); border-radius: 14px; }
+      .api p:last-child { margin-bottom: 0; color: var(--muted); }
+      footer { padding-top: 72px; color: var(--muted); font-size: 13px; }
+      @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 620px) { .head-inner, main { width: min(100% - 28px, 1180px); } .top-links a:not(:last-child) { display: none; } main { padding-top: 48px; } .hero { margin-bottom: 48px; } .start, .grid, .api { grid-template-columns: 1fr; } .category-head { display: block; } .count { display: block; margin-top: 6px; } .visual { min-height: 150px; } }
+    </style>
+  </head>
+  <body>
+    <header class="site-head">
+      <div class="head-inner">
+        <a class="brand" href="#top">Full<span>Scroll</span></a>
+        <nav class="top-links" aria-label="문서 메뉴"><a href="#catalog">Demos</a><a href="#writing">작성 순서</a><a href="../">기본 데모 ↗</a></nav>
+      </div>
+    </header>
+    <main id="top">
+      <header class="hero">
+        <p class="eyebrow">FullScroll Demos</p>
+        <h1>필요한 패턴을 고르고,<br>선언만 복사하세요.</h1>
+        <p class="lead">FullScroll은 옵션을 많이 조합하는 도구가 아닙니다. 기본 구조를 만들고, 필요한 섹션에 <code>fs-*</code> 선언만 추가하는 방식으로 사용합니다.</p>
+      </header>
+
+      <section class="start" id="writing">
+        <article class="start-copy">
+          <p class="eyebrow">먼저 이 구조로 시작</p>
+          <h2>1. 기본 화면을 먼저 작성</h2>
+          <p>모든 섹션은 기본적으로 세로 한 화면입니다. 가로나 예외 동작이 필요한 곳에만 속성을 붙이세요.</p>
+          <pre><code>&lt;main fs&gt;
+  &lt;section&gt;첫 화면&lt;/section&gt;
+  &lt;section fs-horizon&gt;
+    &lt;article&gt;가로 1&lt;/article&gt;
+    &lt;article&gt;가로 2&lt;/article&gt;
+  &lt;/section&gt;
+  &lt;section&gt;마지막 화면&lt;/section&gt;
+&lt;/main&gt;</code></pre>
+        </article>
+        <aside class="checklist">
+          <p class="eyebrow">작성 순서</p>
+          <h2>세 단계면 충분합니다.</h2>
+          <ul>
+            <li>일반 섹션부터 작성</li>
+            <li>필요한 곳에 <code>fs-*</code> 선언 추가</li>
+            <li>한 번만 초기화</li>
+          </ul>
+          <pre><code>new FullScroll('[fs]', {
+  Swiper,
+  dots: true
+});</code></pre>
+        </aside>
+      </section>
+
+      <section class="catalog" id="catalog">
+        <div class="category">
+          <div class="category-head"><div><p class="eyebrow">Layout</p><h2>페이지 구조</h2><p>세로 흐름을 기준으로, 필요한 구간만 가로 그룹이나 자연 크기 화면으로 바꿉니다.</p></div><span class="count">2 patterns</span></div>
+          <div class="grid">
+            <article class="demo-card"><div class="visual visual-basic"><span class="label">Vertical + Horizontal</span></div><div class="card-body"><h3>기본 세로·가로</h3><p>가로 → 세로 → 가로를 하나의 이동 흐름으로 연결합니다.</p><div class="tags"><code>fs</code><code>fs-horizon</code><code>fs-anchor</code></div><div class="card-actions"><a class="preview-link" href="../basic-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-horizon&gt;
+  &lt;article&gt;1&lt;/article&gt;
+  &lt;article&gt;2&lt;/article&gt;
+&lt;/section&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-flow"><span class="label">Natural Flow</span></div><div class="card-body"><h3>자연 크기 Flow</h3><p>짧은 세로 콘텐츠나 필요한 가로 슬라이드만 자연 크기로 표시합니다.</p><div class="tags"><code>fs-flow</code><code>fs-flow="prev,next"</code></div><div class="card-actions"><a class="preview-link" href="../flow-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-horizon&gt;
+  &lt;article&gt;1&lt;/article&gt;
+  &lt;article fs-flow="prev,next"&gt;2&lt;/article&gt;
+  &lt;article&gt;3&lt;/article&gt;
+&lt;/section&gt;</code></pre></details></div></article>
+          </div>
+        </div>
+
+        <div class="category">
+          <div class="category-head"><div><p class="eyebrow">Motion</p><h2>전환과 이동 규칙</h2><p>화면 전환의 분위기와 가로 그룹이 세로 입력을 처리하는 방식을 고릅니다.</p></div><span class="count">2 patterns</span></div>
+          <div class="grid">
+            <article class="demo-card"><div class="visual visual-effect"><span class="label">Fade · Creative · Depth</span></div><div class="card-body"><h3>슬라이드 전환 효과</h3><p>루트 또는 특정 가로 그룹에만 전환 효과를 지정합니다.</p><div class="tags"><code>fs-effect</code><code>fade</code><code>depth</code></div><div class="card-actions"><a class="preview-link" href="../effects-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;main fs fs-effect="fade"&gt;
+  &lt;section fs-horizon fs-effect="depth"&gt;...&lt;/section&gt;
+&lt;/main&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-options"><span class="label">Only · First</span></div><div class="card-body"><h3>가로 이동 옵션</h3><p>세로 입력으로 가로 내부를 건너뛰거나, 언제나 첫 슬라이드로 재진입합니다.</p><div class="tags"><code>fs-horizon-only</code><code>fs-horizon-first</code></div><div class="card-actions"><a class="preview-link" href="../horizon-only-demo/" target="_blank" rel="noopener">Only Preview ↗</a><a class="preview-link" href="../horizon-first-demo/" target="_blank" rel="noopener">First Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-horizon fs-horizon-only&gt;...&lt;/section&gt;
+&lt;section fs-horizon fs-horizon-first&gt;...&lt;/section&gt;</code></pre></details></div></article>
+          </div>
+        </div>
+
+        <div class="category">
+          <div class="category-head"><div><p class="eyebrow">Scene</p><h2>사이트 연출</h2><p>헤더 색상, 한 화면 안의 단계 연출, 영상 재생을 섹션 상태에 연결합니다.</p></div><span class="count">3 patterns</span></div>
+          <div class="grid">
+            <article class="demo-card"><div class="visual visual-theme"><span class="label">Header Theme</span></div><div class="card-body"><h3>헤더 테마</h3><p>현재 섹션의 테마 값을 고정 헤더나 퀵 메뉴에 자동 복사합니다.</p><div class="tags"><code>fs-theme</code><code>themeTarget</code></div><div class="card-actions"><a class="preview-link" href="../theme-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-theme="dark"&gt;...&lt;/section&gt;
+
+new FullScroll('[fs]', {
+  Swiper, themeTarget: '#header'
+});</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-step"><span class="label">Scene Steps</span></div><div class="card-body"><h3>한 화면 안의 단계</h3><p>경로와 URL을 바꾸지 않고 CSS 상태만 1 → 2 → 3으로 진행합니다.</p><div class="tags"><code>fs-step</code><code>fs-step-reentry</code></div><div class="card-actions"><a class="preview-link" href="../steps-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-step="3" fs-step-reentry="first"&gt;
+  ...
+&lt;/section&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-video"><span class="label">Active Media</span></div><div class="card-body"><h3>영상 라이프사이클</h3><p>활성 경로에서만 video·Vimeo·YouTube 재생을 요청하고 이탈 시 멈춥니다.</p><div class="tags"><code>fs-video</code><code>muted</code><code>playsinline</code></div><div class="card-actions"><a class="preview-link" href="../video-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-video&gt;
+  &lt;video muted playsinline src="movie.mp4"&gt;&lt;/video&gt;
+&lt;/section&gt;</code></pre></details></div></article>
+          </div>
+        </div>
+
+        <div class="category">
+          <div class="category-head"><div><p class="eyebrow">Control</p><h2>입력과 운영</h2><p>컨트롤 UI, 내부 스크롤, 반응형 문서 모드와 JavaScript API를 필요한 만큼만 추가합니다.</p></div><span class="count">3 patterns</span></div>
+          <div class="grid">
+            <article class="demo-card"><div class="visual visual-controls"><span class="label">Controls</span></div><div class="card-body"><h3>선언형 컨트롤</h3><p>버튼·현재 번호·전체 수·진행률·특정 경로 이동을 자동 연결합니다.</p><div class="tags"><code>fs-prev</code><code>fs-next</code><code>fs-move</code></div><div class="card-actions"><a class="preview-link" href="../controls-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;button fs-prev&gt;이전&lt;/button&gt;
+&lt;output fs-current&gt;&lt;/output&gt; / &lt;output fs-total&gt;&lt;/output&gt;
+&lt;button fs-next&gt;다음&lt;/button&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-scroll"><span class="label">Inner Scroll</span></div><div class="card-body"><h3>긴 콘텐츠와 내부 스크롤</h3><p>내부 영역을 끝까지 읽은 뒤, 다음 입력에서 다음 경로로 넘어갑니다.</p><div class="tags"><code>fs-scroll</code><code>fs-scroll-reset</code><code>fs-ignore</code></div><div class="card-actions"><a class="preview-link" href="../scroll-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-scroll&gt;
+  긴 콘텐츠
+&lt;/section&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-basic"><span class="label">Responsive</span></div><div class="card-body"><h3>반응형 문서 모드</h3><p>작은 화면에서는 FullScroll 래퍼를 정리하고 자연스러운 일반 문서로 표시합니다.</p><div class="tags"><code>breakpoint</code><code>refresh()</code><code>destroy()</code></div><div class="card-actions"><a class="preview-link" href="../responsive-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>new FullScroll('[fs]', {
+  Swiper,
+  breakpoint: 720
+});</code></pre></details></div></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="category" aria-labelledby="api-title">
+        <div class="category-head"><div><p class="eyebrow">JavaScript</p><h2 id="api-title">필요할 때만 API를 사용합니다.</h2><p>퍼블리셔 작업은 대부분 속성 선언으로 끝납니다. 외부 버튼, 비동기 흐름, 동적 콘텐츠에서만 API를 호출하세요.</p></div></div>
+        <div class="api"><div><h3>이동·상태</h3><p><code>next()</code>, <code>prev()</code>, <code>moveTo(anchor, slide)</code>, <code>state</code></p></div><div><h3>생명주기</h3><p><code>refresh()</code>, <code>enable()</code>, <code>disable()</code>, <code>destroy()</code></p></div></div>
+      </section>
+      <footer>FullScroll Demos · 각 Preview는 독립된 실제 예제 페이지로 열립니다.</footer>
+    </main>
+  </body>
+</html>

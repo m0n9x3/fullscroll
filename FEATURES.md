@@ -12,8 +12,10 @@
 - [x] 중복 `[fs-anchor]` 경고 및 잘못된 히스토리 기록 방지
 - [x] `[fs-flow]` 세로 자연 높이 예외
 - [x] 가로 직계 `[fs-flow]` 슬라이드만 자연 너비 처리
-- [x] `[fs-flow-enter]`·`[fs-flow-exit]` 방향별 동반 슬라이드 뷰
+- [x] `[fs-flow="prev,next"]` 경로별 고정 동반 슬라이드 뷰
 - [x] 동반 뷰 슬라이드의 포커스 접근성 유지
+- [x] `[fs-horizon-only]`의 세로 경로 통과와 좌우 전용 이동
+- [x] `[fs-horizon-first]`의 첫 슬라이드 재진입
 
 ## 입력과 안정화
 
@@ -58,6 +60,15 @@
 - [x] `state`, `FullScroll.get()`, `FullScroll.version`
 - [x] `ready`, `beforechange`, `change`, `responsive`, `resize`, `destroy` 이벤트
 
+## 화면 연출과 활성 상태
+
+- [x] `slide`, `fade`, `creative`, `depth`, `layers`, `zoom` 전환 효과
+- [x] 세로 전환에 맞춘 creative·depth·layers의 Y축 구성
+- [x] Flow 영역에서 자연 크기를 보존하는 slide 효과 고정
+- [x] `[fs-theme]`와 `themeTarget`의 테마 자동 동기화 및 원래 테마 복원
+- [x] `[fs-step]`의 같은 경로 내 단계 진행과 `fs-step-current` 상태
+- [x] `[fs-video]`의 활성 경로 재생·이탈 일시정지
+
 ## 반응형, 복원과 배포
 
 - [x] breakpoint 이하 일반 세로 문서 전환 및 재진입
@@ -86,7 +97,7 @@
 - 루트 직계 `[fs-flow]` 페이지는 자연 높이를 사용합니다.
 - `[fs-horizon]`의 직계 `[fs-flow]` 슬라이드만 자연 너비를 사용합니다.
 - 자연 크기 슬라이드는 인접 콘텐츠가 같은 화면에 보일 수 있습니다.
-- `fs-flow-enter="prev|next"`와 `fs-flow-exit="prev|next"`는 가로 그룹의 바로 인접한 슬라이드만 지정합니다.
+- `fs-flow="prev,next"`는 가로 그룹의 바로 인접한 슬라이드를 경로별 동반 뷰로 지정합니다.
 - 시각적으로 함께 보이는 슬라이드도 원래 경로와 해시를 유지하며, 현재 뷰에 포함된 슬라이드는 `inert`에서 제외합니다.
 
 이후 범위는 `ROADMAP.md`의 승격 기준을 만족할 때만 확장합니다.

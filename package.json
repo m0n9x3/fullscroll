@@ -30,7 +30,7 @@
     "test:watch": "vitest",
     "check:types": "tsc -p tsconfig.types.json",
     "check:dist": "node scripts/check-build.mjs",
-    "check": "node --check src/fullscroll.js && node --check src/flow.js && node --check src/controls.js && node --check src/scroll.js && node --check src/browser.js && node --check examples/mobile/entry.js && node --check scripts/build-mobile-demo.mjs && vitest run && npm run build && npm run check:types && npm run check:dist"
+    "check": "node --check src/fullscroll.js && node --check src/effects.js && node --check src/flow.js && node --check src/media.js && node --check src/controls.js && node --check src/scroll.js && node --check src/browser.js && node --check examples/mobile/entry.js && node --check scripts/build-mobile-demo.mjs && vitest run && npm run build && npm run check:types && npm run check:dist"
   },
   "peerDependencies": {
     "swiper": ">=14.0.0 <15.0.0"

@@ -6,7 +6,7 @@ const fullscroll = new FullScroll(root, {
   Swiper,
   breakpoint: 0,
   dots: true,
-  speed: 560,
+  speed: 1200,
   touchThreshold: 36,
   history: true,
 });
