@@ -53,6 +53,19 @@ body {
   opacity: 0.35;
 }
 
+.demo-directory {
+  top: 68px;
+  max-width: calc(100vw - 32px);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.demo-directory::-webkit-scrollbar {
+  display: none;
+}
+
 .panel {
   position: relative;
   display: flex;

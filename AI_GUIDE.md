@@ -5,12 +5,15 @@
 ## 변하지 않는 1.3.0 계약
 
 - Swiper 14.x는 외부 필수 의존성입니다. FullScroll 번들에 넣지 않습니다.
+- GSAP은 외부 선택 의존성입니다. `@fullscroll/core/gsap` 어댑터에도 GSAP을 번들에 넣지 않습니다.
 - FullScroll이 세로와 가로 Swiper 인스턴스를 생성·소유·제거합니다.
 - Swiper의 `mousewheel`, `keyboard`, `allowTouchMove`를 직접 켜지 않습니다.
 - `[fs-horizon]`만 가로 그룹 선언입니다. `fs-horizontal` 같은 별칭을 만들지 않습니다.
 - 일반 세로 페이지는 루트 직계 `section`입니다. 다른 태그일 때만 `[fs-page]`를 사용합니다.
-- 가로 슬라이드는 `[fs-horizon]`의 직계 요소 자식입니다. 슬라이드별 클래스나 속성을 추가하지 않습니다.
-- 예외가 필요한 곳에만 `[fs-scroll]`, `[fs-scroll-reset]`, `[fs-ignore]`, `[fs-anchor]`를 붙입니다.
+- 가로 슬라이드는 `[fs-horizon]`의 직계 요소 자식 중 `[fs-overlay]`가 아닌 요소입니다. 슬라이드별 클래스나 속성을 추가하지 않습니다.
+- 반복하지 않을 가로 공용 UI에만 직계 `[fs-overlay]`를 사용합니다. 별칭이나 중첩 horizon 대체 규칙을 만들지 않습니다.
+- 예외가 필요한 곳에만 `[fs-scroll]`, `[fs-scroll-reset]`, `[fs-ignore]`, `[fs-anchor]`를 붙입니다. 마지막 자연 높이 footer에는 `[fs-flow="footer"]`를 사용합니다.
+- `[fs-flow="footer"]`는 전용 flow stage에서 움직이므로 일반 세로 페이지의 `[fs-effect]`를 유지합니다. footer와 맞닿는 이동만 slide입니다.
 - 컨트롤은 `[fs-prev]`, `[fs-next]`, `[fs-move]`, `[fs-current]`, `[fs-total]`, `[fs-progress]`를 사용하며 별도 JavaScript 연결을 만들지 않습니다.
 - 1.3.0은 한 페이지당 FullScroll 루트 하나, 가로 중첩 한 단계만 지원합니다.
 - 이전 라이브러리 또는 구버전 API를 위한 호환 계층을 추가하지 않습니다.
@@ -38,10 +41,16 @@
 
 <main fs>
   <section id="visual" fs-horizon fs-anchor="visual">
+    <aside fs-overlay class="visual-ui">
+      <h2>프로젝트</h2>
+      <button type="button" data-visual-prev>이전</button>
+      <button type="button" data-visual-next>다음</button>
+    </aside>
     <article>첫 장</article>
     <article>둘째 장</article>
   </section>
   <section fs-anchor="information" fs-scroll>긴 내용</section>
+  <footer fs-page fs-flow="footer" fs-anchor="footer">Footer</footer>
 </main>
 ```
 
@@ -51,6 +60,8 @@ const pageFlow = new FullScroll('[fs]', {
   dots: true
 });
 ```
+
+슬라이드마다 같은 고정 제목·화살표가 반복되면 해당 UI를 직계 `[fs-overlay]` 하나로 분리합니다. 사이트별 버튼은 `pageFlow.moveTo('visual', slideIndex)`로 연결하고 새로운 코어 컨트롤 속성을 만들지 않습니다. overlay는 route, history, 가로 점, GSAP scene에 포함되지 않습니다. overlay 자체 애니메이션은 `fullscroll:change` 같은 공개 이벤트로 작성자가 연결합니다. 슬라이드 안쪽 장식이나 중첩 가로 그룹을 overlay로 바꾸지 않습니다.
 
 ## 기존 사이트와 충돌 점검
 
@@ -74,16 +85,28 @@ const pageFlow = new FullScroll('[fs]', {
 - obsolete API는 별칭이나 fallback으로 남기지 않고 주 버전 계약에 따라 제거합니다.
 - 런타임 클래스는 Swiper 구동에 필요한 것과 내비게이션 UI에만 사용합니다.
 - 콘텐츠 상태는 `[fs-active]`처럼 현재 상태에만 표시합니다.
+- GSAP은 `.swiper-wrapper`와 `.swiper-slide`가 아니라 슬라이드 내부 콘텐츠에만 적용합니다.
+- GSAP scene은 `state.routes`의 정식 route만 사용하고, 각 애니메이션 배열이 `prepare`, `at.initial`, `at.enter`, `at.leave`를 선택합니다.
+- 초기 current route는 `ready`에 자동 재생하거나 `manual`로 두고 사이트 준비 시점에 `scenes.playCurrent()`를 호출합니다.
+- destination 진입은 그룹 설정에 따라 `transitionstart` 또는 완료 이벤트인 `change`에서 시작하며, `transitioncancel`은 양쪽 상태를 복구합니다.
+- GSAP timeline은 `context.revert()`로 `refresh()`, 반응형 전환과 `destroy()`에서 정리합니다.
 - `destroy()` 후 작성자 DOM의 노드 순서와 속성이 초기화 전과 같아야 합니다.
 - 소스 수정 후 `npm run check`를 통과시키고 `dist`를 다시 생성합니다.
 
 ### 모듈 책임
 
 - `fullscroll.js`는 전체 생명주기와 Swiper 이동 순서만 조정합니다.
+- Swiper DOM·인스턴스 생성과 원상복구는 `runtime.js`, 전환 대기는 `transitions.js`에 둡니다.
+- 휠·키보드·포인터·터치 입력 상태와 리스너는 `input.js`에 둡니다.
+- 해시 읽기·기록과 브라우저 위치 이벤트 직렬화는 `location.js`에 둡니다.
+- breakpoint 감지와 뷰포트 기준 경로 선택은 `responsive.js`에 둡니다.
 - 일반 DOM 탐색과 속성 복원은 `dom.js`, 경로와 앵커 계산은 `routes.js`에 둡니다.
+- 현재 경로의 단계·테마·미디어·비활성 표현은 `route-state.js`에 둡니다.
 - 자연 크기 동반 뷰 판정과 Swiper 위치 계산은 `flow.js`에 둡니다.
 - 페이지 자체·중첩 스크롤 판정은 `scroll.js`, 선언형 컨트롤은 `controls.js`에 둡니다.
 - 휠·터치의 순수 계산은 `gestures.js`, 생성형 점 UI는 `navigation.js`에 둡니다.
+- 활성 경로의 video·YouTube·Vimeo 상태 동기화는 `media.js`에 둡니다.
+- 선택적 GSAP 콘텐츠 연출은 `gsap.js`에 두고 FullScroll의 이동 엔진과 분리합니다.
 - 새 기능을 추가할 때 이미 분리된 책임을 다시 `fullscroll.js` 안에 중복 구현하지 않습니다.
 - 공개 기능을 변경했다면 `FEATURES.md`, README, 타입 선언과 테스트를 함께 갱신합니다.
 
@@ -106,6 +129,7 @@ const pageFlow = new FullScroll('[fs]', {
 | 반응형 | breakpoint 진입 시 일반 문서, 이탈 시 현재 위치 재구성 |
 | 축소 동작 | `prefers-reduced-motion`에서 즉시 이동 |
 | 제거 | `destroy()` 뒤 생성 래퍼·클래스·내비게이션이 남지 않음 |
+| GSAP 연출 | CSS·GSAP 초기화, 그룹별 ready/manual 및 transitionstart/change 시점, 취소 복구, 세 재진입 정책, context 정리가 동작하고 `prefers-reduced-motion`에서 즉시 상태가 적용됨 |
 | 실패 안전 | FullScroll JS 없이도 모든 콘텐츠에 세로로 접근 가능 |
 
 ## 작업 완료 보고에 포함할 내용

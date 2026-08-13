@@ -17,6 +17,18 @@ export function getDirectElements(element) {
   return Array.from(element.children).filter((child) => child instanceof HTMLElement);
 }
 
+export function getDirectHorizonChildren(element) {
+  const slides = [];
+  const overlays = [];
+
+  for (const child of getDirectElements(element)) {
+    if (child.hasAttribute('fs-overlay')) overlays.push(child);
+    else slides.push(child);
+  }
+
+  return { slides, overlays };
+}
+
 export function captureAttributes(element) {
   return Array.from(element.attributes, ({ name, value }) => [name, value]);
 }

@@ -20,13 +20,17 @@
       .compact-card { width: max-content; max-width: min(75vw, 560px); padding: 28px; border: 1px solid rgb(0 0 0 / 20%); border-radius: 24px; }
       .compact-card h2 { margin: 0; font-size: clamp(32px, 5vw, 64px); letter-spacing: -0.06em; }
       .compact-card p { margin-bottom: 0; color: rgb(18 24 39 / 68%); }
+      .footer-flow { display: grid; min-height: 0; place-items: center; padding: 38px 28px; background: #0b1220; text-align: center; }
+      .footer-flow h2 { margin: 0; font-size: clamp(30px, 5vw, 58px); letter-spacing: -.05em; }
+      .footer-flow p { margin: 10px 0 0; color: #aeb8cc; }
       [fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide[fs-flow] { min-height: 0; }
       [fs][fs-ready] [fs-horizon] > .fs-horizon-wrapper > .swiper-slide[fs-flow] { padding: 8vw; }
       .notice { position: fixed; top: 16px; left: 50%; z-index: 20; margin: 0; padding: 8px 14px; border-radius: 999px; background: rgb(0 0 0 / 30%); font-size: 13px; transform: translateX(-50%); }
+      .notice button { margin-left: 8px; padding: 5px 9px; border: 1px solid rgb(255 255 255 / 35%); border-radius: 999px; background: rgb(255 255 255 / 12%); color: inherit; font: inherit; cursor: pointer; }
     </style>
   </head>
   <body>
-    <p class="notice" fs-ignore><strong>fs-flow</strong> · 2번은 항상 1 | 2, 3번은 항상 2 | 3으로 보입니다. 정방향·역방향 모두 같은 뷰를 확인하세요.</p>
+    <p class="notice" fs-ignore><strong>fs-flow</strong> · 정방향·역방향에서 같은 동반 뷰를 확인하세요. <button type="button" fs-move="footer">footer 확인</button></p>
     <main fs>
       <section class="page one"><div><h1>기본 Fullpage</h1><p>다음은 자연 높이 예외입니다.</p></div></section>
       <section fs-flow class="compact"><div class="compact-card"><h2>세로 자연 높이</h2><p>콘텐츠 크기만큼만 차지하는 예외 섹션입니다.</p></div></section>
@@ -39,7 +43,7 @@
         <article fs-flow="next" class="compact"><div class="compact-card"><h2>5 · 자연 너비</h2><p>4에서 들어올 때 6과 함께 보입니다.</p></div></article>
         <article class="slide six"><h2>6 · 기본 이동</h2></article>
       </section>
-      <section class="page three"><div><h2>완료</h2><p>5에서 6은 일반 슬라이드로 이동합니다.</p></div></section>
+      <footer fs-page fs-flow="footer" fs-anchor="footer" class="footer-flow"><div><h2>자연 높이 Footer</h2><p>마지막 세로 경로에서 전용 stage로 올라옵니다.</p></div></footer>
     </main>
     <script src="../../node_modules/swiper/swiper-bundle.min.js"></script>
     <script src="../../dist/fullscroll.js"></script>

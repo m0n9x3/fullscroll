@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 
 const limits = new Map([
-  ['dist/fullscroll.min.js', 40 * 1024],
+  ['dist/fullscroll.min.js', 42 * 1024],
   ['dist/fullscroll.min.css', 6 * 1024],
   ['dist/fullscroll.d.ts', 12 * 1024],
   ['examples/mobile/index.html', 400 * 1024],
@@ -16,9 +16,11 @@ for (const [file, maximum] of limits) {
 
 const required = [
   'dist/fullscroll.esm.js',
+  'dist/gsap.esm.js',
   'dist/fullscroll.js',
   'dist/fullscroll.css',
   'dist/fullscroll.d.ts',
+  'dist/gsap.d.ts',
 ];
 
 await Promise.all(required.map((file) => stat(file)));

@@ -9,6 +9,7 @@ export interface FullScrollRoute {
   readonly page: HTMLElement;
   readonly slide: HTMLElement | null;
   readonly flow: boolean;
+  readonly flowFooter: boolean;
   readonly flowEnterSide: 'prev' | 'next' | null;
   readonly flowExitSide: 'prev' | 'next' | null;
   readonly horizonOnly: boolean;
@@ -27,6 +28,7 @@ export interface FullScrollState {
   readonly currentStep: number;
   readonly totalSteps: number;
   readonly current: FullScrollRoute | null;
+  readonly routes: readonly FullScrollRoute[];
 }
 
 export interface FullScrollOptions {

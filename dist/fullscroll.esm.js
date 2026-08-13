@@ -22,8 +22,28 @@ var DEFAULTS = Object.freeze({
   verticalSwiper: {},
   horizontalSwiper: {}
 });
+var STEP_REENTRIES = /* @__PURE__ */ new Set(["preserve", "first", "last"]);
+function requireObject(value, name) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`[FullScroll] ${name}\uC740 \uAC1D\uCCB4\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
+  }
+}
+function requireNumber(value, name, { positive = false } = {}) {
+  const valid = Number.isFinite(value) && (positive ? value > 0 : value >= 0);
+  if (!valid) {
+    const range = positive ? "0\uBCF4\uB2E4 \uD070 \uC720\uD55C\uD55C \uC22B\uC790" : "0 \uC774\uC0C1\uC758 \uC720\uD55C\uD55C \uC22B\uC790";
+    throw new TypeError(`[FullScroll] ${name}\uC740 ${range}\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
+  }
+}
 function createOptions(options = {}) {
-  return {
+  requireObject(options, "options");
+  if (options.verticalSwiper !== void 0) {
+    requireObject(options.verticalSwiper, "verticalSwiper");
+  }
+  if (options.horizontalSwiper !== void 0) {
+    requireObject(options.horizontalSwiper, "horizontalSwiper");
+  }
+  const resolved = {
     ...DEFAULTS,
     ...options,
     verticalSwiper: {
@@ -35,6 +55,21 @@ function createOptions(options = {}) {
       ...options.horizontalSwiper ?? {}
     }
   };
+  requireNumber(resolved.speed, "speed");
+  requireNumber(resolved.breakpoint, "breakpoint");
+  requireNumber(resolved.wheelThreshold, "wheelThreshold", { positive: true });
+  requireNumber(resolved.wheelIdle, "wheelIdle", { positive: true });
+  requireNumber(resolved.touchThreshold, "touchThreshold", { positive: true });
+  if (typeof resolved.easing !== "string" || !resolved.easing.trim()) {
+    throw new TypeError("[FullScroll] easing\uC740 \uBE44\uC5B4 \uC788\uC9C0 \uC54A\uC740 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
+  }
+  if (typeof resolved.dots !== "boolean" || typeof resolved.history !== "boolean") {
+    throw new TypeError("[FullScroll] dots\uC640 history\uB294 boolean\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
+  }
+  if (!STEP_REENTRIES.has(resolved.stepReentry)) {
+    throw new TypeError("[FullScroll] stepReentry\uB294 preserve, first, last \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+  }
+  return resolved;
 }
 
 // src/dom.js
@@ -52,6 +87,15 @@ function getDirectPages(root) {
 }
 function getDirectElements(element) {
   return Array.from(element.children).filter((child) => child instanceof HTMLElement);
+}
+function getDirectHorizonChildren(element) {
+  const slides = [];
+  const overlays = [];
+  for (const child of getDirectElements(element)) {
+    if (child.hasAttribute("fs-overlay")) overlays.push(child);
+    else slides.push(child);
+  }
+  return { slides, overlays };
 }
 function captureAttributes(element) {
   return Array.from(element.attributes, ({ name, value }) => [name, value]);
@@ -226,381 +270,6 @@ function readGesture(start, clientX, clientY, threshold) {
   };
 }
 
-// src/navigation.js
-function createNavigation({ root, pages, routes, horizons, onNavigate }) {
-  const generatedNodes = [];
-  const verticalNav = document.createElement("nav");
-  verticalNav.className = "fs-nav fs-nav-vertical";
-  verticalNav.setAttribute("fs-ignore", "");
-  verticalNav.setAttribute("aria-label", "\uD398\uC774\uC9C0 \uC774\uB3D9");
-  pages.forEach((page, pageIndex) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "fs-dot";
-    button.setAttribute("aria-label", `${pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0`);
-    button.addEventListener("click", () => {
-      const route = routes.find((item) => item.pageIndex === pageIndex);
-      onNavigate(route.index);
-    });
-    verticalNav.append(button);
-  });
-  root.append(verticalNav);
-  generatedNodes.push(verticalNav);
-  for (const horizon of horizons.values()) {
-    const nav = document.createElement("nav");
-    nav.className = "fs-nav fs-nav-horizon";
-    nav.setAttribute("fs-ignore", "");
-    nav.setAttribute("aria-label", `${horizon.pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0\uC758 \uAC00\uB85C \uC774\uB3D9`);
-    horizon.slides.forEach((slide, slideIndex) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "fs-dot";
-      button.setAttribute("aria-label", `${slideIndex + 1}\uBC88\uC9F8 \uAC00\uB85C \uD398\uC774\uC9C0`);
-      button.addEventListener("click", () => {
-        const route = routes.find(
-          (item) => item.pageIndex === horizon.pageIndex && item.slideIndex === slideIndex
-        );
-        onNavigate(route.index);
-      });
-      nav.append(button);
-    });
-    horizon.page.append(nav);
-    horizon.nav = nav;
-    generatedNodes.push(nav);
-  }
-  return generatedNodes;
-}
-function syncNavigation(root, horizons, route) {
-  root.querySelectorAll(".fs-nav-vertical .fs-dot").forEach((button, index) => {
-    if (index === route.pageIndex) button.setAttribute("aria-current", "true");
-    else button.removeAttribute("aria-current");
-  });
-  for (const horizon of horizons.values()) {
-    const buttons = horizon.nav?.querySelectorAll(".fs-dot") ?? [];
-    buttons.forEach((button, index) => {
-      if (horizon.pageIndex === route.pageIndex && index === route.slideIndex) {
-        button.setAttribute("aria-current", "true");
-      } else {
-        button.removeAttribute("aria-current");
-      }
-    });
-  }
-}
-
-// src/effects.js
-var STATIC_EFFECTS = Object.freeze({
-  slide: { effect: "slide" },
-  fade: { effect: "fade", fadeEffect: { crossFade: true } },
-  blur: { effect: "fade", fadeEffect: { crossFade: true } },
-  zoom: {
-    effect: "creative",
-    creativeEffect: {
-      prev: { translate: [0, 0, -500], scale: 0.65, opacity: 0 },
-      next: { translate: [0, 0, -500], scale: 1.25, opacity: 0 }
-    }
-  }
-});
-var DIRECTIONAL_EFFECTS = /* @__PURE__ */ new Set(["creative", "depth", "layers"]);
-function translate(direction, offset, depth = 0) {
-  return direction === "vertical" ? [0, offset, depth] : [offset, 0, depth];
-}
-function directionalEffect(effect, direction) {
-  if (effect === "creative") {
-    return {
-      effect: "creative",
-      creativeEffect: {
-        prev: { translate: translate(direction, "-20%", -240), scale: 0.9, opacity: 0 },
-        next: { translate: translate(direction, "100%"), opacity: 0 }
-      }
-    };
-  }
-  if (effect === "depth") {
-    return {
-      effect: "creative",
-      creativeEffect: {
-        perspective: true,
-        prev: { translate: [0, 0, -800], scale: 0.78, opacity: 0 },
-        next: { translate: translate(direction, "100%"), opacity: 0 }
-      }
-    };
-  }
-  return {
-    effect: "creative",
-    creativeEffect: {
-      limitProgress: 2,
-      prev: { translate: translate(direction, "-110%", -260), rotate: [0, 0, -12], opacity: 0 },
-      next: { translate: translate(direction, "110%", -260), rotate: [0, 0, 12], opacity: 0 }
-    }
-  };
-}
-function isEffectName(value) {
-  return typeof value === "string" && (Object.hasOwn(STATIC_EFFECTS, value) || DIRECTIONAL_EFFECTS.has(value));
-}
-function resolveEffect(value, fallback = "slide") {
-  return isEffectName(value) ? value : fallback;
-}
-function effectOptions(name, direction = "horizontal") {
-  const effect = resolveEffect(name);
-  return DIRECTIONAL_EFFECTS.has(effect) ? directionalEffect(effect, direction) : STATIC_EFFECTS[effect];
-}
-var EFFECT_NAMES = Object.freeze([...Object.keys(STATIC_EFFECTS), ...DIRECTIONAL_EFFECTS]);
-
-// src/routes.js
-var FLOW_RELATIONS = /* @__PURE__ */ new Set(["prev", "next"]);
-var STEP_REENTRIES = /* @__PURE__ */ new Set(["preserve", "first", "last"]);
-function readEffect(element, warn) {
-  const effect = element.getAttribute("fs-effect")?.trim().toLowerCase() || null;
-  if (!effect) return null;
-  if (isEffectName(effect)) return effect;
-  warn(`[fs-effect]\uB294 ${EFFECT_NAMES.join(", ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
-  return null;
-}
-function readFlowSettings(element, warn, { allowRelations = true } = {}) {
-  const flow = element.hasAttribute("fs-flow");
-  const settings = {
-    flow,
-    flowEnterSide: null,
-    flowExitSide: null
-  };
-  const rawValue = element.getAttribute("fs-flow")?.trim().toLowerCase() || "";
-  if (!rawValue) return settings;
-  if (!allowRelations) {
-    warn("fs-flow\uC758 \uBC29\uD5A5\uAC12\uC740 fs-horizon\uC758 \uC9C1\uACC4 fs-flow \uC2AC\uB77C\uC774\uB4DC\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
-    return settings;
-  }
-  const sides = rawValue.split(",").map((value) => value.trim());
-  if (sides.length > 2 || sides.some((value) => value && !FLOW_RELATIONS.has(value))) {
-    warn("fs-flow\uC5D0\uB294 prev, next \uB610\uB294 prev,next \uD615\uC2DD\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
-    return settings;
-  }
-  settings.flowEnterSide = sides[0] || null;
-  settings.flowExitSide = sides[1] || null;
-  return settings;
-}
-function readStepSettings(element, warn) {
-  const rawSteps = element.getAttribute("fs-step");
-  const rawReentry = element.getAttribute("fs-step-reentry")?.trim().toLowerCase() || null;
-  const settings = { stepMax: 0, stepReentry: null };
-  if (rawSteps !== null) {
-    const stepMax = Number.parseInt(rawSteps, 10);
-    if (!Number.isInteger(stepMax) || stepMax < 2 || String(stepMax) !== rawSteps.trim()) {
-      warn("fs-step\uC740 2 \uC774\uC0C1\uC758 \uC815\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
-    } else {
-      settings.stepMax = stepMax;
-    }
-  }
-  if (rawReentry) {
-    if (!STEP_REENTRIES.has(rawReentry)) {
-      warn("fs-step-reentry\uB294 preserve, first, last \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
-    } else {
-      settings.stepReentry = rawReentry;
-    }
-  }
-  return settings;
-}
-function createRoute({ routes, page, pageIndex, slide = null, slideIndex = null, anchor, horizon, warn }) {
-  const flow = readFlowSettings(slide ?? page, warn, { allowRelations: slide !== null });
-  const step = readStepSettings(slide ?? page, warn);
-  return {
-    index: routes.length,
-    page,
-    pageIndex,
-    slide,
-    slideIndex,
-    anchor,
-    horizonOnly: horizon?.only ?? false,
-    horizonFirst: horizon?.first ?? false,
-    stepElement: step.stepMax ? slide ?? page : null,
-    ...step,
-    mediaElement: (slide ?? page).hasAttribute("fs-video") ? slide ?? page : null,
-    ...flow
-  };
-}
-function scanRoutes(root, warn) {
-  const pages = getDirectPages(root);
-  const routes = [];
-  const anchorMap = /* @__PURE__ */ new Map();
-  const horizons = /* @__PURE__ */ new Map();
-  if (pages.length === 0) {
-    throw new Error("[FullScroll] [fs] \uBC14\uB85C \uC544\uB798\uC5D0 section \uB610\uB294 [fs-page] \uC694\uC18C\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.");
-  }
-  pages.forEach((page, pageIndex) => {
-    const nestedHorizon = page.querySelector("[fs-horizon]");
-    if (nestedHorizon && nestedHorizon !== page) {
-      throw new Error("[FullScroll] fs-horizon \uC911\uCCA9\uC740 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
-    }
-    let anchor = page.getAttribute("fs-anchor")?.trim() || null;
-    if (anchor) {
-      if (anchorMap.has(anchor)) {
-        warn(`\uC911\uBCF5\uB41C fs-anchor="${anchor}"\uAC00 \uC788\uC2B5\uB2C8\uB2E4. \uCCAB \uBC88\uC9F8 \uC575\uCEE4\uB9CC \uC0AC\uC6A9\uD569\uB2C8\uB2E4.`);
-        anchor = null;
-      } else {
-        anchorMap.set(anchor, pageIndex);
-      }
-    }
-    const slides = page.hasAttribute("fs-horizon") ? getDirectElements(page) : [];
-    const isHorizon = slides.length >= 2;
-    if (page.hasAttribute("fs-flow") && isHorizon) {
-      warn(
-        "fs-flow\uB294 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
-      );
-    }
-    if (page.hasAttribute("fs-step") && isHorizon) {
-      warn("fs-step\uC740 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
-    }
-    if (page.hasAttribute("fs-horizon") && !isHorizon) {
-      warn(`\uAC00\uB85C \uADF8\uB8F9 ${pageIndex + 1}\uC5D0 \uC2AC\uB77C\uC774\uB4DC\uAC00 2\uAC1C \uC774\uC0C1 \uD544\uC694\uD569\uB2C8\uB2E4.`);
-    }
-    if (!isHorizon) {
-      routes.push(createRoute({ routes, page, pageIndex, anchor, warn }));
-      return;
-    }
-    const horizon = {
-      page,
-      pageIndex,
-      slides,
-      wrapper: null,
-      swiper: null,
-      nav: null,
-      routes: [],
-      effect: readEffect(page, warn),
-      only: page.hasAttribute("fs-horizon-only"),
-      first: page.hasAttribute("fs-horizon-first")
-    };
-    horizons.set(pageIndex, horizon);
-    slides.forEach((slide, slideIndex) => {
-      const route = createRoute({ routes, page, pageIndex, slide, slideIndex, anchor, horizon, warn });
-      routes.push(route);
-      horizon.routes.push(route);
-    });
-  });
-  return { pages, routes, anchorMap, horizons };
-}
-function routeIndexFromHash(hash, anchorMap, routes) {
-  const rawHash = hash.replace(/^#/, "");
-  if (!rawHash) return null;
-  let decoded;
-  try {
-    decoded = decodeURIComponent(rawHash);
-  } catch {
-    return null;
-  }
-  const [anchor, rawSlide] = decoded.split("/");
-  const pageIndex = anchorMap.get(anchor);
-  if (pageIndex === void 0) return null;
-  const candidates = routes.filter((route) => route.pageIndex === pageIndex);
-  const humanSlide = Number.parseInt(rawSlide, 10);
-  const slideIndex = Number.isFinite(humanSlide) ? clamp(humanSlide - 1, 0, candidates.length - 1) : 0;
-  return candidates[slideIndex].index;
-}
-function hashForRoute(route) {
-  if (!route?.anchor) return null;
-  const suffix = route.slideIndex === null ? "" : `/${route.slideIndex + 1}`;
-  return `#${encodeURIComponent(route.anchor)}${suffix}`;
-}
-function toPublicRoute(route) {
-  if (!route) return null;
-  return Object.freeze({
-    index: route.index,
-    pageIndex: route.pageIndex,
-    slideIndex: route.slideIndex,
-    anchor: route.anchor,
-    page: route.page,
-    slide: route.slide,
-    flow: route.flow,
-    flowEnterSide: route.flowEnterSide,
-    flowExitSide: route.flowExitSide,
-    horizonOnly: route.horizonOnly,
-    horizonFirst: route.horizonFirst,
-    stepMax: route.stepMax,
-    stepReentry: route.stepReentry
-  });
-}
-
-// src/flow.js
-function readSlideMetrics(horizon, slideIndex) {
-  const slide = horizon?.slides?.[slideIndex] ?? null;
-  const swiper = horizon?.swiper;
-  if (!slide || !swiper) return null;
-  const gridStart = Number(swiper.slidesGrid?.[slideIndex]);
-  const gridSize = Number(swiper.slidesSizesGrid?.[slideIndex]);
-  const start = Number.isFinite(gridStart) ? gridStart : slide.offsetLeft;
-  const size = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : slide.offsetWidth;
-  return { slide, start, size };
-}
-function resolveRelation(horizon, destination) {
-  if (destination.flow && destination.flowEnterSide) {
-    return { flowRoute: destination, relation: destination.flowEnterSide };
-  }
-  const previousRoute = horizon.routes[destination.slideIndex - 1] ?? null;
-  if (previousRoute?.flowExitSide === "next") {
-    return { flowRoute: previousRoute, relation: "next" };
-  }
-  const nextRoute = horizon.routes[destination.slideIndex + 1] ?? null;
-  if (nextRoute?.flowExitSide === "prev") {
-    return { flowRoute: nextRoute, relation: "prev" };
-  }
-  return null;
-}
-function resolveFlowView({ horizon, destination }) {
-  if (!horizon?.swiper || destination.slideIndex === null) return null;
-  const relationView = resolveRelation(horizon, destination);
-  if (!relationView) return null;
-  const { flowRoute, relation } = relationView;
-  const metrics = readSlideMetrics(horizon, flowRoute.slideIndex);
-  const companionIndex = flowRoute.slideIndex + (relation === "prev" ? -1 : 1);
-  const companion = horizon.slides[companionIndex] ?? null;
-  const viewportSize = horizon.page.clientWidth || horizon.swiper.width || 0;
-  if (!metrics || !viewportSize || !metrics.size || !companion) return null;
-  const rawOffset = relation === "prev" ? metrics.start + metrics.size - viewportSize : metrics.start;
-  const maxTranslate = Number(horizon.swiper.maxTranslate?.());
-  const lastMetrics = readSlideMetrics(horizon, horizon.slides.length - 1);
-  const maximum = Number.isFinite(maxTranslate) ? Math.max(0, -maxTranslate) : lastMetrics ? Math.max(0, lastMetrics.start + lastMetrics.size - viewportSize) : 0;
-  return {
-    offset: clamp(rawOffset, 0, maximum),
-    pageIndex: horizon.pageIndex,
-    flowSlide: metrics.slide,
-    companion
-  };
-}
-
-// src/media.js
-function iframeCommand(iframe, command) {
-  const source = iframe.getAttribute("src") || "";
-  if (!source) return;
-  if (source.includes("player.vimeo.com")) {
-    iframe.contentWindow?.postMessage({ method: command }, "*");
-    return;
-  }
-  if (source.includes("youtube.com") || source.includes("youtu.be")) {
-    iframe.contentWindow?.postMessage(
-      JSON.stringify({ event: "command", func: command === "play" ? "playVideo" : "pauseVideo", args: "" }),
-      "*"
-    );
-  }
-}
-function forEachRouteMedia(element, callback) {
-  if (!element) return;
-  element.querySelectorAll("video").forEach((video) => callback(video, "video"));
-  element.querySelectorAll("iframe").forEach((iframe) => callback(iframe, "iframe"));
-}
-function playRouteMedia(element) {
-  forEachRouteMedia(element, (media, type) => {
-    if (type === "iframe") {
-      iframeCommand(media, "play");
-      return;
-    }
-    media.play?.()?.catch?.(() => {
-    });
-  });
-}
-function pauseRouteMedia(element) {
-  forEachRouteMedia(element, (media, type) => {
-    if (type === "iframe") iframeCommand(media, "pause");
-    else media.pause?.();
-  });
-}
-
 // src/scroll.js
 var SCROLLABLE_OVERFLOW = /^(auto|scroll|overlay)$/;
 function asElement(target) {
@@ -664,6 +333,1128 @@ function resetRouteScroll(route) {
   });
 }
 
+// src/input.js
+function createInputController({
+  root,
+  options,
+  isActive,
+  isMoving,
+  currentHorizon,
+  move,
+  moveWithinHorizon,
+  moveToBoundary
+}) {
+  let attached = false;
+  let wheelAccumulator = 0;
+  let wheelDirection = 0;
+  let wheelGestureLocked = false;
+  let lastWheelAt = 0;
+  let lastNativeScrollAt = 0;
+  let wheelResetTimer = 0;
+  let wheelUnlockTimer = 0;
+  let pointer = null;
+  let touch = null;
+  function scheduleWheelUnlock() {
+    clearTimeout(wheelUnlockTimer);
+    const elapsed = performance.now() - lastWheelAt;
+    const delay = Math.max(0, options.wheelIdle - elapsed);
+    wheelUnlockTimer = setTimeout(() => {
+      if (isMoving()) {
+        scheduleWheelUnlock();
+        return;
+      }
+      if (performance.now() - lastWheelAt < options.wheelIdle) {
+        scheduleWheelUnlock();
+        return;
+      }
+      wheelGestureLocked = false;
+      wheelDirection = 0;
+    }, delay);
+  }
+  function onWheel(event) {
+    if (!isActive() || event.ctrlKey || closestWithin(root, event.target, "[fs-ignore]")) return;
+    const delta = normalizeWheelDelta(event);
+    const direction = Math.sign(delta);
+    if (!direction) return;
+    const now = performance.now();
+    if (closestWithin(root, event.target, WHEEL_INTERACTIVE_SELECTOR)) return;
+    const scrollAreas = getScrollAreas(root, event.target);
+    if (canAnyScroll(scrollAreas, direction)) {
+      lastNativeScrollAt = now;
+      wheelAccumulator = 0;
+      return;
+    }
+    event.preventDefault();
+    lastWheelAt = now;
+    if (scrollAreas.length > 0 && now - lastNativeScrollAt < options.wheelIdle) return;
+    if (wheelGestureLocked || isMoving()) {
+      scheduleWheelUnlock();
+      return;
+    }
+    if (wheelDirection !== direction) {
+      wheelAccumulator = 0;
+      wheelDirection = direction;
+    }
+    wheelAccumulator += delta;
+    clearTimeout(wheelResetTimer);
+    wheelResetTimer = setTimeout(() => {
+      wheelAccumulator = 0;
+      wheelDirection = 0;
+    }, options.wheelIdle);
+    if (Math.abs(wheelAccumulator) < options.wheelThreshold) return;
+    wheelAccumulator = 0;
+    wheelGestureLocked = true;
+    Promise.resolve(move(direction, "wheel")).finally(scheduleWheelUnlock);
+  }
+  function onKeyDown(event) {
+    if (!isActive() || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    if (event.target instanceof Element && (event.target.matches(INTERACTIVE_SELECTOR) || closestWithin(root, event.target, "[fs-ignore]"))) {
+      return;
+    }
+    let action = null;
+    if (["ArrowDown", "PageDown"].includes(event.key) || event.code === "Space" && !event.shiftKey) {
+      action = () => move(1, "keyboard");
+    } else if (["ArrowUp", "PageUp"].includes(event.key) || event.code === "Space" && event.shiftKey) {
+      action = () => move(-1, "keyboard");
+    } else if (event.key === "ArrowRight") {
+      action = () => moveWithinHorizon(1, "keyboard");
+    } else if (event.key === "ArrowLeft") {
+      action = () => moveWithinHorizon(-1, "keyboard");
+    } else if (event.key === "Home") {
+      action = () => moveToBoundary("first", "keyboard");
+    } else if (event.key === "End") {
+      action = () => moveToBoundary("last", "keyboard");
+    }
+    if (action && action() !== false) event.preventDefault();
+  }
+  function startGesture(event, point, id) {
+    const scrollAreas = getScrollAreas(root, event.target);
+    return {
+      id,
+      x: point.clientX,
+      y: point.clientY,
+      scrollAreas,
+      scrollSnapshot: captureScrollGesture(scrollAreas)
+    };
+  }
+  function finishGesture(gesture, clientX, clientY) {
+    const result = readGesture(gesture, clientX, clientY, options.touchThreshold);
+    if (!result) return;
+    const { direction, vertical } = result;
+    if (vertical && gesture.scrollAreas.length > 0 && (scrollGestureWasConsumed(gesture.scrollSnapshot) || canAnyScroll(gesture.scrollAreas, direction))) {
+      return;
+    }
+    if (!vertical && currentHorizon()?.only) {
+      moveWithinHorizon(direction, "touch");
+      return;
+    }
+    move(direction, "touch");
+  }
+  function onPointerDown(event) {
+    if (!isActive() || event.pointerType === "mouse" || event.pointerType === "touch" || !event.isPrimary || closestWithin(root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    pointer = startGesture(event, event, event.pointerId);
+  }
+  function onPointerUp(event) {
+    if (!pointer || pointer.id !== event.pointerId || isMoving()) {
+      pointer = null;
+      return;
+    }
+    const gesture = pointer;
+    pointer = null;
+    finishGesture(gesture, event.clientX, event.clientY);
+  }
+  function onTouchStart(event) {
+    if (!isActive() || event.touches.length > 1 || closestWithin(root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    const point = event.changedTouches[0];
+    if (point) touch = startGesture(event, point, point.identifier);
+  }
+  function onTouchEnd(event) {
+    if (!touch || isMoving()) {
+      touch = null;
+      return;
+    }
+    const point = Array.from(event.changedTouches).find((item) => item.identifier === touch.id);
+    if (!point) return;
+    const gesture = touch;
+    touch = null;
+    finishGesture(gesture, point.clientX, point.clientY);
+  }
+  function clearGestures() {
+    pointer = null;
+    touch = null;
+  }
+  function attach() {
+    if (attached) return;
+    attached = true;
+    root.addEventListener("wheel", onWheel, { passive: false });
+    root.addEventListener("pointerdown", onPointerDown, { passive: true });
+    root.addEventListener("pointerup", onPointerUp, { passive: true });
+    root.addEventListener("pointercancel", clearGestures, { passive: true });
+    root.addEventListener("touchstart", onTouchStart, { passive: true });
+    root.addEventListener("touchend", onTouchEnd, { passive: true });
+    root.addEventListener("touchcancel", clearGestures, { passive: true });
+    document.addEventListener("keydown", onKeyDown);
+  }
+  function detach() {
+    if (attached) {
+      attached = false;
+      root.removeEventListener("wheel", onWheel);
+      root.removeEventListener("pointerdown", onPointerDown);
+      root.removeEventListener("pointerup", onPointerUp);
+      root.removeEventListener("pointercancel", clearGestures);
+      root.removeEventListener("touchstart", onTouchStart);
+      root.removeEventListener("touchend", onTouchEnd);
+      root.removeEventListener("touchcancel", clearGestures);
+      document.removeEventListener("keydown", onKeyDown);
+    }
+    clearTimeout(wheelResetTimer);
+    clearTimeout(wheelUnlockTimer);
+    wheelAccumulator = 0;
+    wheelDirection = 0;
+    wheelGestureLocked = false;
+    clearGestures();
+  }
+  return Object.freeze({ attach, detach, scheduleWheelUnlock });
+}
+
+// src/effects.js
+var STATIC_EFFECTS = Object.freeze({
+  slide: { effect: "slide" },
+  fade: { effect: "fade", fadeEffect: { crossFade: true } },
+  blur: { effect: "fade", fadeEffect: { crossFade: true } },
+  zoom: {
+    effect: "creative",
+    creativeEffect: {
+      prev: { translate: [0, 0, -500], scale: 0.65, opacity: 0 },
+      next: { translate: [0, 0, -500], scale: 1.25, opacity: 0 }
+    }
+  }
+});
+var DIRECTIONAL_EFFECTS = /* @__PURE__ */ new Set(["creative", "depth", "layers"]);
+function translate(direction, offset, depth = 0) {
+  return direction === "vertical" ? [0, offset, depth] : [offset, 0, depth];
+}
+function directionalEffect(effect, direction) {
+  if (effect === "creative") {
+    return {
+      effect: "creative",
+      creativeEffect: {
+        prev: { translate: translate(direction, "-20%", -240), scale: 0.9, opacity: 0 },
+        next: { translate: translate(direction, "100%"), opacity: 0 }
+      }
+    };
+  }
+  if (effect === "depth") {
+    return {
+      effect: "creative",
+      creativeEffect: {
+        perspective: true,
+        limitProgress: 1,
+        prev: { translate: [0, 0, -520], scale: 0.88, opacity: 0.14 },
+        next: { translate: translate(direction, "94%", -80), scale: 0.98, opacity: 0 }
+      }
+    };
+  }
+  return {
+    effect: "creative",
+    creativeEffect: {
+      limitProgress: 2,
+      prev: { translate: translate(direction, "-110%", -260), rotate: [0, 0, -12], opacity: 0 },
+      next: { translate: translate(direction, "110%", -260), rotate: [0, 0, 12], opacity: 0 }
+    }
+  };
+}
+function isEffectName(value) {
+  return typeof value === "string" && (Object.hasOwn(STATIC_EFFECTS, value) || DIRECTIONAL_EFFECTS.has(value));
+}
+function resolveEffect(value, fallback = "slide") {
+  return isEffectName(value) ? value : fallback;
+}
+function effectOptions(name, direction = "horizontal") {
+  const effect = resolveEffect(name);
+  return DIRECTIONAL_EFFECTS.has(effect) ? directionalEffect(effect, direction) : STATIC_EFFECTS[effect];
+}
+var EFFECT_NAMES = Object.freeze([...Object.keys(STATIC_EFFECTS), ...DIRECTIONAL_EFFECTS]);
+
+// src/routes.js
+var FLOW_RELATIONS = /* @__PURE__ */ new Set(["prev", "next"]);
+var STEP_REENTRIES2 = /* @__PURE__ */ new Set(["preserve", "first", "last"]);
+function readEffect(element, warn) {
+  const effect = element.getAttribute("fs-effect")?.trim().toLowerCase() || null;
+  if (!effect) return null;
+  if (isEffectName(effect)) return effect;
+  warn(`[fs-effect]\uB294 ${EFFECT_NAMES.join(", ")} \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
+  return null;
+}
+function readFlowSettings(element, warn, { allowRelations = true, allowFooter = false } = {}) {
+  const flow = element.hasAttribute("fs-flow");
+  const settings = {
+    flow,
+    flowFooter: false,
+    flowEnterSide: null,
+    flowExitSide: null
+  };
+  const rawValue = element.getAttribute("fs-flow")?.trim().toLowerCase() || "";
+  if (!rawValue) return settings;
+  if (rawValue === "footer") {
+    if (allowFooter) {
+      settings.flowFooter = true;
+    } else {
+      settings.flow = false;
+      warn('fs-flow="footer"\uB294 [fs]\uC758 \uB9C8\uC9C0\uB9C9 \uC138\uB85C \uD398\uC774\uC9C0\uC5D0\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.');
+    }
+    return settings;
+  }
+  if (!allowRelations) {
+    warn("fs-flow\uC758 \uBC29\uD5A5\uAC12\uC740 fs-horizon\uC758 \uC9C1\uACC4 fs-flow \uC2AC\uB77C\uC774\uB4DC\uC5D0\uC11C\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+    return settings;
+  }
+  const sides = rawValue.split(",").map((value) => value.trim());
+  if (sides.length > 2 || sides.some((value) => value && !FLOW_RELATIONS.has(value))) {
+    warn("fs-flow\uC5D0\uB294 prev, next \uB610\uB294 prev,next \uD615\uC2DD\uB9CC \uC0AC\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+    return settings;
+  }
+  settings.flowEnterSide = sides[0] || null;
+  settings.flowExitSide = sides[1] || null;
+  return settings;
+}
+function readStepSettings(element, warn) {
+  const rawSteps = element.getAttribute("fs-step");
+  const rawReentry = element.getAttribute("fs-step-reentry")?.trim().toLowerCase() || null;
+  const settings = { stepMax: 0, stepReentry: null };
+  if (rawSteps !== null) {
+    const stepMax = Number.parseInt(rawSteps, 10);
+    if (!Number.isInteger(stepMax) || stepMax < 2 || String(stepMax) !== rawSteps.trim()) {
+      warn("fs-step\uC740 2 \uC774\uC0C1\uC758 \uC815\uC218\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+    } else {
+      settings.stepMax = stepMax;
+    }
+  }
+  if (rawReentry) {
+    if (!STEP_REENTRIES2.has(rawReentry)) {
+      warn("fs-step-reentry\uB294 preserve, first, last \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+    } else {
+      settings.stepReentry = rawReentry;
+    }
+  }
+  return settings;
+}
+function createRoute({ routes, page, pageIndex, pageCount, slide = null, slideIndex = null, anchor, horizon, warn }) {
+  const flow = readFlowSettings(slide ?? page, warn, {
+    allowRelations: slide !== null,
+    allowFooter: slide === null && pageIndex === pageCount - 1
+  });
+  const step = readStepSettings(slide ?? page, warn);
+  return {
+    index: routes.length,
+    page,
+    pageIndex,
+    slide,
+    slideIndex,
+    anchor,
+    horizonOnly: horizon?.only ?? false,
+    horizonFirst: horizon?.first ?? false,
+    stepElement: step.stepMax ? slide ?? page : null,
+    ...step,
+    mediaElement: (slide ?? page).hasAttribute("fs-video") ? slide ?? page : null,
+    ...flow
+  };
+}
+function scanRoutes(root, warn) {
+  const pages = getDirectPages(root);
+  const routes = [];
+  const anchorMap = /* @__PURE__ */ new Map();
+  const horizons = /* @__PURE__ */ new Map();
+  if (pages.length === 0) {
+    throw new Error("[FullScroll] [fs] \uBC14\uB85C \uC544\uB798\uC5D0 section \uB610\uB294 [fs-page] \uC694\uC18C\uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.");
+  }
+  pages.forEach((page, pageIndex) => {
+    const nestedHorizon = page.querySelector("[fs-horizon]");
+    if (nestedHorizon && nestedHorizon !== page) {
+      throw new Error("[FullScroll] fs-horizon \uC911\uCCA9\uC740 \uC9C0\uC6D0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
+    }
+    let anchor = page.getAttribute("fs-anchor")?.trim() || null;
+    if (anchor) {
+      if (anchorMap.has(anchor)) {
+        warn(`\uC911\uBCF5\uB41C fs-anchor="${anchor}"\uAC00 \uC788\uC2B5\uB2C8\uB2E4. \uCCAB \uBC88\uC9F8 \uC575\uCEE4\uB9CC \uC0AC\uC6A9\uD569\uB2C8\uB2E4.`);
+        anchor = null;
+      } else {
+        anchorMap.set(anchor, pageIndex);
+      }
+    }
+    const { slides, overlays } = page.hasAttribute("fs-horizon") ? getDirectHorizonChildren(page) : { slides: [], overlays: [] };
+    const isHorizon = slides.length >= 2;
+    if (page.hasAttribute("fs-flow") && isHorizon) {
+      warn(
+        "fs-flow\uB294 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."
+      );
+    }
+    if (page.hasAttribute("fs-step") && isHorizon) {
+      warn("fs-step\uC740 fs-horizon\uC758 \uC9C1\uACC4 \uC2AC\uB77C\uC774\uB4DC\uC5D0 \uBD99\uC5EC\uC57C \uD569\uB2C8\uB2E4. \uAC00\uB85C \uADF8\uB8F9 \uC790\uCCB4\uC5D0\uB294 \uC801\uC6A9\uB418\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.");
+    }
+    if (page.hasAttribute("fs-horizon") && !isHorizon) {
+      warn(`\uAC00\uB85C \uADF8\uB8F9 ${pageIndex + 1}\uC5D0 \uC2AC\uB77C\uC774\uB4DC\uAC00 2\uAC1C \uC774\uC0C1 \uD544\uC694\uD569\uB2C8\uB2E4.`);
+    }
+    if (!isHorizon) {
+      routes.push(createRoute({ routes, page, pageIndex, pageCount: pages.length, anchor, warn }));
+      return;
+    }
+    const horizon = {
+      page,
+      pageIndex,
+      slides,
+      overlays,
+      wrapper: null,
+      swiper: null,
+      nav: null,
+      routes: [],
+      effect: readEffect(page, warn),
+      only: page.hasAttribute("fs-horizon-only"),
+      first: page.hasAttribute("fs-horizon-first")
+    };
+    horizons.set(pageIndex, horizon);
+    slides.forEach((slide, slideIndex) => {
+      const route = createRoute({ routes, page, pageIndex, pageCount: pages.length, slide, slideIndex, anchor, horizon, warn });
+      routes.push(route);
+      horizon.routes.push(route);
+    });
+  });
+  return { pages, routes, anchorMap, horizons };
+}
+function routeIndexFromHash(hash, anchorMap, routes) {
+  const rawHash = hash.replace(/^#/, "");
+  if (!rawHash) return null;
+  const separator = rawHash.indexOf("/");
+  const rawAnchor = separator === -1 ? rawHash : rawHash.slice(0, separator);
+  const rawSlide = separator === -1 ? "" : rawHash.slice(separator + 1);
+  if (rawSlide.includes("/")) return null;
+  let anchor;
+  try {
+    anchor = decodeURIComponent(rawAnchor);
+  } catch {
+    return null;
+  }
+  const pageIndex = anchorMap.get(anchor);
+  if (pageIndex === void 0) return null;
+  const candidates = routes.filter((route) => route.pageIndex === pageIndex);
+  if (separator !== -1 && !/^[1-9]\d*$/.test(rawSlide)) return null;
+  const slideIndex = rawSlide ? clamp(Number(rawSlide) - 1, 0, candidates.length - 1) : 0;
+  return candidates[slideIndex].index;
+}
+function hashForRoute(route) {
+  if (!route?.anchor) return null;
+  const suffix = route.slideIndex === null ? "" : `/${route.slideIndex + 1}`;
+  return `#${encodeURIComponent(route.anchor)}${suffix}`;
+}
+function toPublicRoute(route) {
+  if (!route) return null;
+  return Object.freeze({
+    index: route.index,
+    pageIndex: route.pageIndex,
+    slideIndex: route.slideIndex,
+    anchor: route.anchor,
+    page: route.page,
+    slide: route.slide,
+    flow: route.flow,
+    flowFooter: route.flowFooter,
+    flowEnterSide: route.flowEnterSide,
+    flowExitSide: route.flowExitSide,
+    horizonOnly: route.horizonOnly,
+    horizonFirst: route.horizonFirst,
+    stepMax: route.stepMax,
+    stepReentry: route.stepReentry
+  });
+}
+
+// src/location.js
+function createLocationController({
+  history,
+  getAnchorMap,
+  getRoutes,
+  getCurrentIndex,
+  isDestroyed,
+  isMoving,
+  isActive,
+  moveTo
+}) {
+  let started = false;
+  let pendingIndex = null;
+  let syncing = false;
+  function resolve(hash) {
+    return routeIndexFromHash(hash, getAnchorMap(), getRoutes());
+  }
+  function read() {
+    return resolve(window.location.hash);
+  }
+  async function flush() {
+    if (isDestroyed() || syncing || isMoving()) return;
+    syncing = true;
+    try {
+      while (pendingIndex !== null && !isDestroyed()) {
+        const routeIndex = pendingIndex;
+        pendingIndex = null;
+        if (routeIndex === getCurrentIndex()) continue;
+        await moveTo(routeIndex, {
+          trigger: "history",
+          updateHistory: false,
+          instant: !isActive()
+        });
+      }
+    } finally {
+      syncing = false;
+      if (pendingIndex !== null && !isMoving() && !isDestroyed()) {
+        queueMicrotask(flush);
+      }
+    }
+  }
+  function onChange() {
+    const routeIndex = read() ?? (window.location.hash ? null : 0);
+    if (routeIndex === null) return;
+    pendingIndex = routeIndex;
+    flush();
+  }
+  function write(route) {
+    if (!history || !route?.anchor || !window.history?.pushState) return;
+    const hash = hashForRoute(route);
+    if (window.location.hash === hash) return;
+    window.history.pushState(window.history.state, "", hash);
+  }
+  function start() {
+    if (started) return;
+    started = true;
+    window.addEventListener("popstate", onChange);
+    window.addEventListener("hashchange", onChange);
+  }
+  function stop() {
+    if (started) {
+      started = false;
+      window.removeEventListener("popstate", onChange);
+      window.removeEventListener("hashchange", onChange);
+    }
+    pendingIndex = null;
+  }
+  return Object.freeze({ flush, onChange, read, resolve, start, stop, write });
+}
+
+// src/navigation.js
+function createNavigation({ root, pages, routes, horizons, onNavigate }) {
+  const generatedNodes = [];
+  const verticalNav = document.createElement("nav");
+  verticalNav.className = "fs-nav fs-nav-vertical";
+  verticalNav.setAttribute("fs-ignore", "");
+  verticalNav.setAttribute("aria-label", "\uD398\uC774\uC9C0 \uC774\uB3D9");
+  pages.forEach((page, pageIndex) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "fs-dot";
+    button.setAttribute("aria-label", `${pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0`);
+    button.addEventListener("click", () => {
+      const route = routes.find((item) => item.pageIndex === pageIndex);
+      onNavigate(route.index);
+    });
+    verticalNav.append(button);
+  });
+  root.append(verticalNav);
+  generatedNodes.push(verticalNav);
+  for (const horizon of horizons.values()) {
+    const nav = document.createElement("nav");
+    nav.className = "fs-nav fs-nav-horizon";
+    nav.setAttribute("fs-ignore", "");
+    nav.setAttribute("aria-label", `${horizon.pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0\uC758 \uAC00\uB85C \uC774\uB3D9`);
+    horizon.slides.forEach((slide, slideIndex) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "fs-dot";
+      button.setAttribute("aria-label", `${slideIndex + 1}\uBC88\uC9F8 \uAC00\uB85C \uD398\uC774\uC9C0`);
+      button.addEventListener("click", () => {
+        const route = routes.find(
+          (item) => item.pageIndex === horizon.pageIndex && item.slideIndex === slideIndex
+        );
+        onNavigate(route.index);
+      });
+      nav.append(button);
+    });
+    horizon.page.append(nav);
+    horizon.nav = nav;
+    generatedNodes.push(nav);
+  }
+  return generatedNodes;
+}
+function syncNavigation(root, horizons, route) {
+  root.querySelectorAll(".fs-nav-vertical .fs-dot").forEach((button, index) => {
+    if (index === route.pageIndex) button.setAttribute("aria-current", "true");
+    else button.removeAttribute("aria-current");
+  });
+  for (const horizon of horizons.values()) {
+    const buttons = horizon.nav?.querySelectorAll(".fs-dot") ?? [];
+    buttons.forEach((button, index) => {
+      if (horizon.pageIndex === route.pageIndex && index === route.slideIndex) {
+        button.setAttribute("aria-current", "true");
+      } else {
+        button.removeAttribute("aria-current");
+      }
+    });
+  }
+}
+
+// src/responsive.js
+function closestRouteToViewport(routes, currentIndex) {
+  let bestIndex = clamp(currentIndex, 0, routes.length - 1);
+  let bestDistance = Number.POSITIVE_INFINITY;
+  routes.forEach((route, index) => {
+    const element = route.slide ?? route.page;
+    const distance = Math.abs(element.getBoundingClientRect().top);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+  return bestIndex;
+}
+function scrollRouteIntoView(route, smooth) {
+  const element = route?.slide ?? route?.page;
+  element?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
+}
+function createResponsiveController({
+  breakpoint,
+  isDestroyed,
+  isDisabled,
+  isResponsive,
+  isActive,
+  onEnter,
+  onExit,
+  onResize
+}) {
+  let started = false;
+  let resizeTimer = 0;
+  function matches() {
+    return breakpoint > 0 && window.innerWidth <= breakpoint;
+  }
+  function refresh() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (isDestroyed() || isDisabled()) return;
+      const shouldRespond = matches();
+      if (shouldRespond && !isResponsive()) onEnter();
+      else if (!shouldRespond && isResponsive()) onExit();
+      else if (isActive()) onResize();
+    }, 120);
+  }
+  function start() {
+    if (started) return;
+    started = true;
+    window.addEventListener("resize", refresh, { passive: true });
+    window.addEventListener("orientationchange", refresh, { passive: true });
+  }
+  function stop() {
+    if (started) {
+      started = false;
+      window.removeEventListener("resize", refresh);
+      window.removeEventListener("orientationchange", refresh);
+    }
+    clearTimeout(resizeTimer);
+  }
+  return Object.freeze({ matches, refresh, start, stop });
+}
+
+// src/flow.js
+function readSlideMetrics(horizon, slideIndex) {
+  const slide = horizon?.slides?.[slideIndex] ?? null;
+  const swiper = horizon?.swiper;
+  if (!slide || !swiper) return null;
+  const gridStart = Number(swiper.slidesGrid?.[slideIndex]);
+  const gridSize = Number(swiper.slidesSizesGrid?.[slideIndex]);
+  const start = Number.isFinite(gridStart) ? gridStart : slide.offsetLeft;
+  const size = Number.isFinite(gridSize) && gridSize > 0 ? gridSize : slide.offsetWidth;
+  return { slide, start, size };
+}
+function resolveRelation(horizon, destination) {
+  if (destination.flow && destination.flowEnterSide) {
+    return { flowRoute: destination, relation: destination.flowEnterSide };
+  }
+  const previousRoute = horizon.routes[destination.slideIndex - 1] ?? null;
+  if (previousRoute?.flowExitSide === "next") {
+    return { flowRoute: previousRoute, relation: "next" };
+  }
+  const nextRoute = horizon.routes[destination.slideIndex + 1] ?? null;
+  if (nextRoute?.flowExitSide === "prev") {
+    return { flowRoute: nextRoute, relation: "prev" };
+  }
+  return null;
+}
+function resolveFlowView({ horizon, destination }) {
+  if (!horizon?.swiper || destination.slideIndex === null) return null;
+  const relationView = resolveRelation(horizon, destination);
+  if (!relationView) return null;
+  const { flowRoute, relation } = relationView;
+  const metrics = readSlideMetrics(horizon, flowRoute.slideIndex);
+  const companionIndex = flowRoute.slideIndex + (relation === "prev" ? -1 : 1);
+  const companion = horizon.slides[companionIndex] ?? null;
+  const viewportSize = horizon.page.clientWidth || horizon.swiper.width || 0;
+  if (!metrics || !viewportSize || !metrics.size || !companion) return null;
+  const rawOffset = relation === "prev" ? metrics.start + metrics.size - viewportSize : metrics.start;
+  const maxTranslate = Number(horizon.swiper.maxTranslate?.());
+  const lastMetrics = readSlideMetrics(horizon, horizon.slides.length - 1);
+  const maximum = Number.isFinite(maxTranslate) ? Math.max(0, -maxTranslate) : lastMetrics ? Math.max(0, lastMetrics.start + lastMetrics.size - viewportSize) : 0;
+  return {
+    offset: clamp(rawOffset, 0, maximum),
+    pageIndex: horizon.pageIndex,
+    flowSlide: metrics.slide,
+    companion
+  };
+}
+
+// src/media.js
+var VIMEO_HOSTS = /* @__PURE__ */ new Set(["player.vimeo.com"]);
+var YOUTUBE_HOSTS = /* @__PURE__ */ new Set([
+  "youtube.com",
+  "www.youtube.com",
+  "youtube-nocookie.com",
+  "www.youtube-nocookie.com",
+  "youtu.be"
+]);
+function iframeCommand(iframe, command) {
+  const source = iframe.getAttribute("src") || "";
+  if (!source) return;
+  let url;
+  try {
+    url = new URL(source, document.baseURI);
+  } catch {
+    return;
+  }
+  if (VIMEO_HOSTS.has(url.hostname)) {
+    iframe.contentWindow?.postMessage({ method: command }, url.origin);
+    return;
+  }
+  if (YOUTUBE_HOSTS.has(url.hostname)) {
+    iframe.contentWindow?.postMessage(
+      JSON.stringify({
+        event: "command",
+        func: command === "play" ? "playVideo" : "pauseVideo",
+        args: []
+      }),
+      url.origin
+    );
+  }
+}
+function forEachRouteMedia(element, callback) {
+  if (!element) return;
+  element.querySelectorAll("video").forEach((video) => callback(video, "video"));
+  element.querySelectorAll("iframe").forEach((iframe) => callback(iframe, "iframe"));
+}
+function playRouteMedia(element) {
+  forEachRouteMedia(element, (media, type) => {
+    if (type === "iframe") {
+      iframeCommand(media, "play");
+      return;
+    }
+    media.play?.()?.catch?.(() => {
+    });
+  });
+}
+function pauseRouteMedia(element) {
+  forEachRouteMedia(element, (media, type) => {
+    if (type === "iframe") iframeCommand(media, "pause");
+    else media.pause?.();
+  });
+}
+
+// src/route-state.js
+function createRouteState({ root, stepReentry, themeTarget, getSnapshots, warn }) {
+  const stepStates = /* @__PURE__ */ new WeakMap();
+  const themeSnapshots = /* @__PURE__ */ new Map();
+  let themeTargets = [];
+  let stepElement = null;
+  let activeMediaElement = null;
+  function setupThemeTargets() {
+    restoreThemeTargets();
+    if (!themeTarget) return;
+    if (typeof themeTarget !== "string") {
+      warn("themeTarget\uC740 \uD5E4\uB354 \uC694\uC18C\uB97C \uCC3E\uB294 CSS \uC120\uD0DD\uC790 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
+      return;
+    }
+    try {
+      themeTargets = Array.from(document.querySelectorAll(themeTarget));
+    } catch {
+      warn(`themeTarget \uC120\uD0DD\uC790\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4: ${themeTarget}`);
+      return;
+    }
+    themeTargets.forEach((target) => {
+      themeSnapshots.set(target, target.getAttribute("fs-theme"));
+    });
+  }
+  function restoreThemeTargets() {
+    themeSnapshots.forEach((theme, target) => {
+      if (theme === null) target.removeAttribute("fs-theme");
+      else target.setAttribute("fs-theme", theme);
+    });
+    themeTargets = [];
+    themeSnapshots.clear();
+  }
+  function stepInfo(route) {
+    if (!route?.stepElement || route.stepMax < 2) return null;
+    const current = clamp(stepStates.get(route.stepElement) ?? 1, 1, route.stepMax);
+    return {
+      element: route.stepElement,
+      current,
+      max: route.stepMax,
+      reentry: route.stepReentry ?? stepReentry
+    };
+  }
+  function applyStepEntry(destination, origin) {
+    const step = stepInfo(destination);
+    if (!step || step.element === origin?.stepElement) return;
+    if (step.reentry === "first") stepStates.set(step.element, 1);
+    else if (step.reentry === "last") stepStates.set(step.element, step.max);
+    else if (!stepStates.has(step.element)) stepStates.set(step.element, 1);
+  }
+  function setStep(element, value) {
+    stepStates.set(element, value);
+  }
+  function syncStep(route) {
+    if (stepElement && stepElement !== route.stepElement) {
+      stepElement.removeAttribute("fs-step-current");
+    }
+    const step = stepInfo(route);
+    stepElement = step?.element ?? null;
+    if (step) step.element.setAttribute("fs-step-current", String(step.current));
+  }
+  function syncMedia(route) {
+    const nextElement = route?.mediaElement ?? null;
+    if (nextElement === activeMediaElement) return;
+    pauseRouteMedia(activeMediaElement);
+    activeMediaElement = nextElement;
+    playRouteMedia(nextElement);
+  }
+  function syncTheme(route) {
+    const theme = route.slide?.getAttribute("fs-theme") ?? route.page.getAttribute("fs-theme");
+    const targets = [root, ...themeTargets];
+    targets.forEach((target) => {
+      if (theme !== null) {
+        target.setAttribute("fs-theme", theme);
+      } else if (target === root) {
+        target.removeAttribute("fs-theme");
+      } else {
+        const originalTheme = themeSnapshots.get(target);
+        if (originalTheme === null) target.removeAttribute("fs-theme");
+        else target.setAttribute("fs-theme", originalTheme);
+      }
+    });
+  }
+  function setRuntimeInert(element, inactive) {
+    const original = getSnapshots().get(element)?.some(([name]) => name === "inert");
+    if (inactive || original) element.setAttribute("inert", "");
+    else element.removeAttribute("inert");
+  }
+  function syncAccessibility(route, pages, horizons, flowView) {
+    const visibleSlides = /* @__PURE__ */ new Set([route.slide]);
+    if (flowView?.pageIndex === route.pageIndex && flowView.companion) {
+      visibleSlides.add(flowView.companion);
+    }
+    if (flowView?.pageIndex === route.pageIndex && flowView.flowSlide) {
+      visibleSlides.add(flowView.flowSlide);
+    }
+    const viewport = root.getBoundingClientRect?.();
+    const hasViewport = Boolean(viewport?.height);
+    for (const page of pages) {
+      const bounds = page.getBoundingClientRect?.();
+      const intersectsViewport = hasViewport && route.flow && bounds && bounds.bottom > viewport.top + 1 && bounds.top < viewport.bottom - 1;
+      setRuntimeInert(page, page !== route.page && !intersectsViewport);
+    }
+    for (const horizon of horizons.values()) {
+      for (const slide of horizon.slides) {
+        const inactive = horizon.page !== route.page || !visibleSlides.has(slide);
+        setRuntimeInert(slide, inactive);
+      }
+    }
+  }
+  function sync(route, pages, horizons, flowView) {
+    syncStep(route);
+    syncTheme(route);
+    syncMedia(route);
+    syncAccessibility(route, pages, horizons, flowView);
+  }
+  function destroy() {
+    syncMedia(null);
+    restoreThemeTargets();
+    stepElement?.removeAttribute("fs-step-current");
+    stepElement = null;
+  }
+  return Object.freeze({
+    applyStepEntry,
+    destroy,
+    setStep,
+    setupThemeTargets,
+    stepInfo,
+    sync,
+    syncMedia
+  });
+}
+
+// src/runtime.js
+function createRuntime(root, routes) {
+  return {
+    rootWrapper: document.createElement("div"),
+    rootMarkers: /* @__PURE__ */ new Map(),
+    horizons: [],
+    footerRoute: routes.find((route) => route.flowFooter) ?? null,
+    footerStage: null,
+    rootViewport: root,
+    rootEffect: "slide"
+  };
+}
+function mountRootStructure({ root, pages, runtime }) {
+  runtime.rootWrapper.className = "swiper-wrapper fs-vertical-wrapper";
+  const firstPage = pages[0];
+  if (runtime.footerRoute) {
+    runtime.footerStage = document.createElement("div");
+    runtime.footerStage.className = "fs-footer-stage";
+    runtime.rootViewport = document.createElement("div");
+    runtime.rootViewport.className = "swiper fs-effect-viewport";
+    runtime.rootViewport.append(runtime.rootWrapper);
+    runtime.footerStage.append(runtime.rootViewport);
+    root.insertBefore(runtime.footerStage, firstPage);
+  } else {
+    root.insertBefore(runtime.rootWrapper, firstPage);
+  }
+  for (const page of pages) {
+    const marker = document.createComment("fullscroll-page");
+    root.insertBefore(marker, page);
+    runtime.rootMarkers.set(page, marker);
+    if (page === runtime.footerRoute?.page) {
+      runtime.footerStage.append(page);
+    } else {
+      page.classList.add("swiper-slide");
+      runtime.rootWrapper.append(page);
+    }
+  }
+}
+function markFlowRoutes(routes) {
+  for (const route of routes) {
+    if (route.flow && !route.flowFooter) {
+      (route.slide ?? route.page).setAttribute("fs-flow-active", "");
+    }
+  }
+}
+function mountHorizon({ horizon, currentRoute, horizontalEffect, Swiper, options }) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "swiper-wrapper fs-horizon-wrapper";
+  horizon.wrapper = wrapper;
+  horizon.markers = /* @__PURE__ */ new Map();
+  horizon.page.insertBefore(wrapper, horizon.slides[0]);
+  for (const slide of horizon.slides) {
+    const marker = document.createComment("fullscroll-slide");
+    horizon.page.insertBefore(marker, slide);
+    horizon.markers.set(slide, marker);
+    slide.classList.add("swiper-slide");
+    wrapper.append(slide);
+  }
+  horizon.page.classList.add("swiper", "fs-horizon-runtime");
+  const hasFlowSlide = horizon.routes.some((route) => route.flow);
+  const effect = hasFlowSlide ? "slide" : horizon.effect ?? horizontalEffect;
+  horizon.runtimeEffect = effect;
+  horizon.page.setAttribute("fs-effect-active", effect);
+  const initialSlide = currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null ? currentRoute.slideIndex : 0;
+  horizon.swiper = new Swiper(horizon.page, {
+    ...options.horizontalSwiper,
+    ...effectOptions(effect, "horizontal"),
+    direction: "horizontal",
+    slidesPerView: hasFlowSlide ? "auto" : 1,
+    ...hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
+    initialSlide,
+    speed: options.speed,
+    allowTouchMove: false,
+    simulateTouch: false,
+    nested: true,
+    mousewheel: false,
+    keyboard: false,
+    observer: false,
+    observeParents: false
+  });
+}
+function mountRootSwiper({ runtime, currentRoute, rootEffect, hasFlowPage, Swiper, options }) {
+  runtime.rootEffect = hasFlowPage ? "slide" : rootEffect;
+  const initialPageIndex = runtime.footerRoute && currentRoute.flowFooter ? runtime.footerRoute.pageIndex - 1 : currentRoute.pageIndex;
+  return new Swiper(runtime.rootViewport, {
+    ...options.verticalSwiper,
+    ...effectOptions(runtime.rootEffect, "vertical"),
+    direction: "vertical",
+    slidesPerView: hasFlowPage ? "auto" : 1,
+    ...hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
+    initialSlide: initialPageIndex,
+    speed: options.speed,
+    allowTouchMove: false,
+    simulateTouch: false,
+    mousewheel: false,
+    keyboard: false,
+    observer: false,
+    observeParents: false
+  });
+}
+function mountRuntime({
+  root,
+  pages,
+  routes,
+  horizons,
+  currentRoute,
+  Swiper,
+  options,
+  readEffect: readEffect2,
+  warn
+}) {
+  const runtime = createRuntime(root, routes);
+  let rootSwiper = null;
+  markFlowRoutes(routes);
+  mountRootStructure({ root, pages, runtime });
+  root.classList.add("fs-root");
+  if (!runtime.footerRoute) root.classList.add("swiper");
+  root.style.setProperty("--fs-speed", `${options.speed}ms`);
+  root.style.setProperty("--fs-easing", options.easing);
+  root.setAttribute("fs-ready", "");
+  const hasFlowPage = routes.some(
+    (route) => route.slideIndex === null && route.flow && !route.flowFooter
+  );
+  const rootAttributeEffect = root.getAttribute("fs-effect");
+  const rootEffect = readEffect2(
+    rootAttributeEffect,
+    options.effect ?? options.verticalSwiper.effect
+  );
+  const horizontalEffect = readEffect2(
+    rootAttributeEffect,
+    options.effect ?? options.horizontalSwiper.effect
+  );
+  let flowView = null;
+  try {
+    for (const horizon of horizons.values()) {
+      runtime.horizons.push(horizon);
+      mountHorizon({ horizon, currentRoute, horizontalEffect, Swiper, options });
+    }
+    rootSwiper = mountRootSwiper({
+      runtime,
+      currentRoute,
+      rootEffect,
+      hasFlowPage,
+      Swiper,
+      options
+    });
+    root.setAttribute("fs-effect-active", runtime.rootEffect);
+    if (currentRoute.slideIndex !== null) {
+      const horizon = horizons.get(currentRoute.pageIndex);
+      flowView = resolveFlowView({ horizon, destination: currentRoute });
+      if (flowView) {
+        horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+      }
+    }
+  } catch (error) {
+    unmountRuntime({ root, runtime, rootSwiper, warn });
+    throw error;
+  }
+  return { runtime, rootSwiper, flowView };
+}
+function destroySwiper(swiper, label, warn) {
+  try {
+    swiper?.destroy?.(true, true);
+  } catch (error) {
+    warn(`${label} Swiper \uC81C\uAC70 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4: ${error.message}`);
+  }
+}
+function restoreHorizon(horizon) {
+  const wrapper = horizon.wrapper;
+  for (const [slide, marker] of horizon.markers ?? []) {
+    if (slide.parentNode === wrapper && marker.parentNode === horizon.page) {
+      horizon.page.insertBefore(slide, marker);
+    }
+    marker.remove();
+  }
+  if (wrapper?.parentNode) {
+    const remainingNodes = Array.from(wrapper.childNodes);
+    wrapper.remove();
+    horizon.page.append(...remainingNodes);
+  }
+  horizon.wrapper = null;
+  horizon.markers = null;
+  horizon.swiper = null;
+  horizon.runtimeEffect = null;
+}
+function restoreRoot(root, runtime) {
+  for (const [page, marker] of runtime.rootMarkers) {
+    if ((page.parentNode === runtime.rootWrapper || page.parentNode === runtime.footerStage) && marker.parentNode === root) {
+      root.insertBefore(page, marker);
+    }
+    marker.remove();
+  }
+  if (runtime.footerStage?.parentNode) {
+    runtime.footerStage.remove();
+  } else if (runtime.rootWrapper?.parentNode) {
+    const remainingNodes = Array.from(runtime.rootWrapper.childNodes);
+    runtime.rootWrapper.remove();
+    root.append(...remainingNodes);
+  }
+}
+function unmountRuntime({ root, runtime, rootSwiper, warn }) {
+  if (!runtime) return;
+  destroySwiper(rootSwiper, "\uC138\uB85C", warn);
+  for (const horizon of runtime.horizons) {
+    destroySwiper(horizon.swiper, "\uAC00\uB85C", warn);
+  }
+  for (const horizon of runtime.horizons) {
+    restoreHorizon(horizon);
+  }
+  restoreRoot(root, runtime);
+}
+
+// src/transitions.js
+function waitForSwiper(swiper, duration, start) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(fallback);
+      swiper.off?.("transitionEnd", finish);
+      callback(value);
+    };
+    const finish = () => settle(resolve);
+    const fallback = setTimeout(finish, duration + 180);
+    try {
+      swiper.once?.("transitionEnd", finish);
+      start();
+    } catch (error) {
+      settle(reject, error);
+    }
+  });
+}
+function transitionToIndex(swiper, index, duration, flowOffset = null) {
+  if (!swiper) return Promise.resolve();
+  if (flowOffset !== null && typeof swiper.translateTo === "function") {
+    swiper.slideTo(index, 0, false);
+    return transitionToOffset(swiper, flowOffset, duration);
+  }
+  if (duration === 0 || swiper.activeIndex === index) {
+    swiper.slideTo(index, 0, false);
+    return Promise.resolve();
+  }
+  return waitForSwiper(swiper, duration, () => swiper.slideTo(index, duration, true));
+}
+function transitionToOffset(swiper, offset, duration) {
+  const translate2 = -offset;
+  if (duration === 0) {
+    swiper.translateTo(translate2, 0, false, false);
+    return Promise.resolve();
+  }
+  return waitForSwiper(
+    swiper,
+    duration,
+    () => swiper.translateTo(translate2, duration, true, false)
+  );
+}
+
 // src/fullscroll.js
 var INSTANCES = /* @__PURE__ */ new WeakMap();
 var FullScroll = class {
@@ -703,56 +1494,77 @@ var FullScroll = class {
     this.controls = null;
     this.snapshots = /* @__PURE__ */ new Map();
     this.generatedNodes = [];
-    this.themeTargets = [];
-    this.themeSnapshots = /* @__PURE__ */ new Map();
-    this.stepStates = /* @__PURE__ */ new WeakMap();
-    this.stepElement = null;
-    this.activeMediaElement = null;
     this.readyOnce = false;
-    this.wheelAccumulator = 0;
-    this.wheelDirection = 0;
-    this.wheelGestureLocked = false;
-    this.lastWheelAt = 0;
-    this.lastNativeScrollAt = 0;
-    this.wheelResetTimer = 0;
-    this.wheelUnlockTimer = 0;
-    this.resizeTimer = 0;
-    this.pointer = null;
-    this.touch = null;
-    this.pendingLocationIndex = null;
-    this.locationSyncing = false;
     this.flowView = null;
     this.transitionVersion = 0;
-    this.onWheel = this.onWheel.bind(this);
-    this.onKeyDown = this.onKeyDown.bind(this);
-    this.onPointerDown = this.onPointerDown.bind(this);
-    this.onPointerUp = this.onPointerUp.bind(this);
-    this.onPointerCancel = this.onPointerCancel.bind(this);
-    this.onTouchStart = this.onTouchStart.bind(this);
-    this.onTouchEnd = this.onTouchEnd.bind(this);
-    this.onTouchCancel = this.onTouchCancel.bind(this);
-    this.onResize = this.onResize.bind(this);
-    this.onLocationChange = this.onLocationChange.bind(this);
     this.onPageShow = this.onPageShow.bind(this);
+    this.input = createInputController({
+      root: this.root,
+      options: this.options,
+      isActive: () => this.active,
+      isMoving: () => this.moving,
+      currentHorizon: () => {
+        const route = this.routes[this.currentIndex];
+        return route ? this.horizons.get(route.pageIndex) : null;
+      },
+      move: (direction, trigger) => direction > 0 ? this.next({ trigger }) : this.prev({ trigger }),
+      moveWithinHorizon: (direction, trigger) => direction > 0 ? this.nextWithinHorizon(trigger) : this.prevWithinHorizon(trigger),
+      moveToBoundary: (boundary, trigger) => this.goToRoute(boundary === "first" ? 0 : this.routes.length - 1, { trigger })
+    });
+    this.location = createLocationController({
+      history: this.options.history,
+      getAnchorMap: () => this.anchorMap,
+      getRoutes: () => this.routes,
+      getCurrentIndex: () => this.currentIndex,
+      isDestroyed: () => this.destroyed,
+      isMoving: () => this.moving,
+      isActive: () => this.active,
+      moveTo: (routeIndex, moveOptions) => this.goToRoute(routeIndex, moveOptions)
+    });
+    this.viewport = createResponsiveController({
+      breakpoint: this.options.breakpoint,
+      isDestroyed: () => this.destroyed,
+      isDisabled: () => this.manualDisabled,
+      isResponsive: () => this.responsive,
+      isActive: () => this.active,
+      onEnter: () => this.disableForResponsive(),
+      onExit: () => this.enableFromResponsive(),
+      onResize: () => this.resizeRuntime()
+    });
+    this.routeState = createRouteState({
+      root: this.root,
+      stepReentry: this.options.stepReentry,
+      themeTarget: this.options.themeTarget,
+      getSnapshots: () => this.snapshots,
+      warn: (message) => this.warn(message)
+    });
     this.captureSnapshots();
-    this.scan();
-    this.setupControls();
-    this.setupThemeTargets();
-    const locationIndex = this.routeIndexFromLocation();
-    this.currentIndex = this.normalizeHorizonEntry(locationIndex ?? 0);
-    window.addEventListener("resize", this.onResize, { passive: true });
-    window.addEventListener("orientationchange", this.onResize, { passive: true });
-    window.addEventListener("popstate", this.onLocationChange);
-    window.addEventListener("hashchange", this.onLocationChange);
-    window.addEventListener("pageshow", this.onPageShow);
-    INSTANCES.set(root, this);
-    if (this.shouldUseResponsiveMode()) {
-      this.responsive = true;
-      this.root.setAttribute("fs-responsive", "");
-      this.scrollResponsiveTargetIntoView(false);
-      this.syncControls();
-    } else {
-      this.enableRuntime({ rescan: false });
+    try {
+      this.scan();
+      this.setupControls();
+      this.routeState.setupThemeTargets();
+      const locationIndex = this.location.read();
+      this.currentIndex = this.normalizeHorizonEntry(locationIndex ?? 0);
+      this.installGlobalListeners();
+      INSTANCES.set(root, this);
+      if (this.viewport.matches()) {
+        this.responsive = true;
+        this.root.setAttribute("fs-responsive", "");
+        scrollRouteIntoView(this.routes[this.currentIndex], false);
+        this.syncControls();
+      } else {
+        this.enableRuntime({ rescan: false });
+      }
+    } catch (error) {
+      this.input.detach();
+      this.removeGlobalListeners();
+      this.controls?.destroy();
+      this.controls = null;
+      this.routeState.destroy();
+      this.restoreSnapshots();
+      this.destroyed = true;
+      INSTANCES.delete(root);
+      throw error;
     }
   }
   get state() {
@@ -766,7 +1578,8 @@ var FullScroll = class {
       total: this.routes.length,
       currentStep: step?.current ?? 1,
       totalSteps: step?.max ?? 1,
-      current: this.publicRoute(this.routes[this.currentIndex])
+      current: this.publicRoute(this.routes[this.currentIndex]),
+      routes: Object.freeze(this.routes.map((route) => this.publicRoute(route)))
     });
   }
   captureSnapshots() {
@@ -802,8 +1615,16 @@ var FullScroll = class {
     this.controls = createControls({
       isActive: () => this.active && !this.responsive && !this.manualDisabled,
       resolveRoute: (reference) => {
-        const hash = reference.startsWith("#") ? reference : `#${reference}`;
-        return routeIndexFromHash(hash, this.anchorMap, this.routes);
+        const rawReference = reference.replace(/^#/, "");
+        try {
+          const exactAnchor = decodeURIComponent(rawReference);
+          const pageIndex = this.anchorMap.get(exactAnchor);
+          if (pageIndex !== void 0) return this.firstRouteIndexForPage(pageIndex);
+        } catch {
+          return null;
+        }
+        const hash = `#${rawReference}`;
+        return this.location.resolve(hash);
       },
       onPrev: () => this.prev({ trigger: "control" }),
       onNext: () => this.next({ trigger: "control" }),
@@ -811,37 +1632,22 @@ var FullScroll = class {
       warn: (message) => this.warn(message)
     });
   }
-  setupThemeTargets() {
-    this.restoreThemeTargets();
-    if (!this.options.themeTarget) return;
-    if (typeof this.options.themeTarget !== "string") {
-      this.warn("themeTarget\uC740 \uD5E4\uB354 \uC694\uC18C\uB97C \uCC3E\uB294 CSS \uC120\uD0DD\uC790 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.");
-      return;
-    }
-    try {
-      this.themeTargets = Array.from(document.querySelectorAll(this.options.themeTarget));
-    } catch {
-      this.warn(`themeTarget \uC120\uD0DD\uC790\uAC00 \uC62C\uBC14\uB974\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4: ${this.options.themeTarget}`);
-      return;
-    }
-    this.themeTargets.forEach((target) => {
-      this.themeSnapshots.set(target, target.getAttribute("fs-theme"));
-    });
-  }
-  restoreThemeTargets() {
-    this.themeSnapshots.forEach((theme, target) => {
-      if (theme === null) target.removeAttribute("fs-theme");
-      else target.setAttribute("fs-theme", theme);
-    });
-    this.themeTargets = [];
-    this.themeSnapshots.clear();
-  }
   syncControls() {
     this.controls?.sync({
       active: this.active && !this.responsive && !this.manualDisabled,
       currentIndex: this.currentIndex,
       total: this.routes.length
     });
+  }
+  installGlobalListeners() {
+    this.location.start();
+    this.viewport.start();
+    window.addEventListener("pageshow", this.onPageShow);
+  }
+  removeGlobalListeners() {
+    this.location.stop();
+    this.viewport.stop();
+    window.removeEventListener("pageshow", this.onPageShow);
   }
   enableRuntime({ rescan = true } = {}) {
     if (this.destroyed || this.active || this.manualDisabled) {
@@ -854,104 +1660,28 @@ var FullScroll = class {
     }
     this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
     const currentRoute = this.routes[this.currentIndex];
-    const runtime = {
-      rootWrapper: document.createElement("div"),
-      rootMarkers: /* @__PURE__ */ new Map(),
-      horizons: []
-    };
-    this.runtime = runtime;
-    runtime.rootWrapper.className = "swiper-wrapper fs-vertical-wrapper";
-    const firstPage = this.pages[0];
-    this.root.insertBefore(runtime.rootWrapper, firstPage);
-    this.pages.forEach((page) => {
-      const marker = document.createComment("fullscroll-page");
-      this.root.insertBefore(marker, page);
-      runtime.rootMarkers.set(page, marker);
-      page.classList.add("swiper-slide");
-      runtime.rootWrapper.append(page);
-    });
-    this.root.classList.add("swiper", "fs-root");
-    this.root.style.setProperty("--fs-speed", `${this.options.speed}ms`);
-    this.root.style.setProperty("--fs-easing", this.options.easing);
-    this.root.setAttribute("fs-ready", "");
-    const hasFlowPage = this.pages.some((page) => page.hasAttribute("fs-flow"));
-    const rootAttributeEffect = this.root.getAttribute("fs-effect");
-    const rootEffect = this.readEffect(
-      rootAttributeEffect,
-      this.options.effect ?? this.options.verticalSwiper.effect
-    );
-    const horizontalEffect = this.readEffect(
-      rootAttributeEffect,
-      this.options.effect ?? this.options.horizontalSwiper.effect
-    );
     try {
-      for (const horizon of this.horizons.values()) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "swiper-wrapper fs-horizon-wrapper";
-        horizon.wrapper = wrapper;
-        horizon.markers = /* @__PURE__ */ new Map();
-        horizon.page.insertBefore(wrapper, horizon.slides[0]);
-        horizon.slides.forEach((slide) => {
-          const marker = document.createComment("fullscroll-slide");
-          horizon.page.insertBefore(marker, slide);
-          horizon.markers.set(slide, marker);
-          slide.classList.add("swiper-slide");
-          wrapper.append(slide);
-        });
-        horizon.page.classList.add("swiper", "fs-horizon-runtime");
-        const hasFlowSlide = horizon.slides.some((slide) => slide.hasAttribute("fs-flow"));
-        const effect = hasFlowSlide ? "slide" : horizon.effect ?? horizontalEffect;
-        horizon.page.setAttribute("fs-effect-active", effect);
-        const initialSlide = currentRoute.pageIndex === horizon.pageIndex && currentRoute.slideIndex !== null ? currentRoute.slideIndex : 0;
-        horizon.swiper = new this.Swiper(horizon.page, {
-          ...this.options.horizontalSwiper,
-          ...effectOptions(effect, "horizontal"),
-          direction: "horizontal",
-          slidesPerView: hasFlowSlide ? "auto" : 1,
-          ...hasFlowSlide ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
-          initialSlide,
-          speed: this.options.speed,
-          allowTouchMove: false,
-          simulateTouch: false,
-          nested: true,
-          mousewheel: false,
-          keyboard: false,
-          observer: false,
-          observeParents: false
-        });
-        runtime.horizons.push(horizon);
-      }
-      const rootRuntimeEffect = hasFlowPage ? "slide" : rootEffect;
-      this.root.setAttribute("fs-effect-active", rootRuntimeEffect);
-      this.rootSwiper = new this.Swiper(this.root, {
-        ...this.options.verticalSwiper,
-        ...effectOptions(rootRuntimeEffect, "vertical"),
-        direction: "vertical",
-        slidesPerView: hasFlowPage ? "auto" : 1,
-        ...hasFlowPage ? { slidesPerGroup: 1, slidesPerGroupAuto: false } : {},
-        initialSlide: currentRoute.pageIndex,
-        speed: this.options.speed,
-        allowTouchMove: false,
-        simulateTouch: false,
-        mousewheel: false,
-        keyboard: false,
-        observer: false,
-        observeParents: false
+      const mounted = mountRuntime({
+        root: this.root,
+        pages: this.pages,
+        routes: this.routes,
+        horizons: this.horizons,
+        currentRoute,
+        Swiper: this.Swiper,
+        options: this.options,
+        readEffect: (value, fallback) => this.readEffect(value, fallback),
+        warn: (message) => this.warn(message)
       });
+      this.runtime = mounted.runtime;
+      this.rootSwiper = mounted.rootSwiper;
+      this.flowView = mounted.flowView;
     } catch (error) {
-      this.teardownRuntime();
+      this.restoreSnapshots();
       throw error;
     }
     this.active = true;
-    if (currentRoute.slideIndex !== null) {
-      const horizon = this.horizons.get(currentRoute.pageIndex);
-      const flowView = resolveFlowView({ horizon, destination: currentRoute });
-      if (flowView) {
-        horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
-        this.flowView = flowView;
-      }
-    }
-    this.installRuntimeListeners();
+    this.input.attach();
+    this.settleRuntimeRoute(currentRoute);
     this.buildNavigation();
     this.syncState();
     if (!this.readyOnce) {
@@ -964,77 +1694,21 @@ var FullScroll = class {
     if (!this.runtime) {
       return;
     }
-    this.removeRuntimeListeners();
+    this.input.detach();
     this.clearGeneratedNodes();
-    try {
-      this.rootSwiper?.destroy?.(true, true);
-    } catch (error) {
-      this.warn(`\uC138\uB85C Swiper \uC81C\uAC70 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4: ${error.message}`);
-    }
-    for (const horizon of this.runtime.horizons) {
-      try {
-        horizon.swiper?.destroy?.(true, true);
-      } catch (error) {
-        this.warn(`\uAC00\uB85C Swiper \uC81C\uAC70 \uC911 \uC624\uB958\uAC00 \uBC1C\uC0DD\uD588\uC2B5\uB2C8\uB2E4: ${error.message}`);
-      }
-    }
-    for (const horizon of this.runtime.horizons) {
-      const wrapper = horizon.wrapper;
-      for (const [slide, marker] of horizon.markers ?? []) {
-        if (slide.parentNode === wrapper && marker.parentNode === horizon.page) {
-          horizon.page.insertBefore(slide, marker);
-        }
-        marker.remove();
-      }
-      if (wrapper?.parentNode) {
-        const remainingNodes = Array.from(wrapper.childNodes);
-        wrapper.remove();
-        horizon.page.append(...remainingNodes);
-      }
-    }
-    const rootWrapper = this.runtime.rootWrapper;
-    for (const [page, marker] of this.runtime.rootMarkers) {
-      if (page.parentNode === rootWrapper && marker.parentNode === this.root) {
-        this.root.insertBefore(page, marker);
-      }
-      marker.remove();
-    }
-    if (rootWrapper?.parentNode) {
-      const remainingNodes = Array.from(rootWrapper.childNodes);
-      rootWrapper.remove();
-      this.root.append(...remainingNodes);
-    }
+    unmountRuntime({
+      root: this.root,
+      runtime: this.runtime,
+      rootSwiper: this.rootSwiper,
+      warn: (message) => this.warn(message)
+    });
     this.restoreSnapshots();
     this.rootSwiper = null;
     this.runtime = null;
     this.active = false;
     this.moving = false;
     this.flowView = null;
-    this.syncMedia(null);
-    this.pointer = null;
-    this.touch = null;
-  }
-  installRuntimeListeners() {
-    this.root.addEventListener("wheel", this.onWheel, { passive: false });
-    this.root.addEventListener("pointerdown", this.onPointerDown, { passive: true });
-    this.root.addEventListener("pointerup", this.onPointerUp, { passive: true });
-    this.root.addEventListener("pointercancel", this.onPointerCancel, { passive: true });
-    this.root.addEventListener("touchstart", this.onTouchStart, { passive: true });
-    this.root.addEventListener("touchend", this.onTouchEnd, { passive: true });
-    this.root.addEventListener("touchcancel", this.onTouchCancel, { passive: true });
-    document.addEventListener("keydown", this.onKeyDown);
-  }
-  removeRuntimeListeners() {
-    this.root.removeEventListener("wheel", this.onWheel);
-    this.root.removeEventListener("pointerdown", this.onPointerDown);
-    this.root.removeEventListener("pointerup", this.onPointerUp);
-    this.root.removeEventListener("pointercancel", this.onPointerCancel);
-    this.root.removeEventListener("touchstart", this.onTouchStart);
-    this.root.removeEventListener("touchend", this.onTouchEnd);
-    this.root.removeEventListener("touchcancel", this.onTouchCancel);
-    document.removeEventListener("keydown", this.onKeyDown);
-    clearTimeout(this.wheelResetTimer);
-    clearTimeout(this.wheelUnlockTimer);
+    this.routeState.syncMedia(null);
   }
   async goToRoute(targetIndex, { trigger = "api", updateHistory = true, instant = false } = {}) {
     if (this.destroyed || this.moving || this.routes.length === 0) {
@@ -1046,9 +1720,9 @@ var FullScroll = class {
     }
     if (!this.active) {
       this.currentIndex = nextIndex;
-      this.scrollResponsiveTargetIntoView(true);
+      scrollRouteIntoView(this.routes[nextIndex], true);
       if (updateHistory) {
-        this.writeHistory(this.routes[nextIndex]);
+        this.location.write(this.routes[nextIndex]);
       }
       this.syncControls();
       return true;
@@ -1072,12 +1746,14 @@ var FullScroll = class {
     this.moving = true;
     this.root.setAttribute("fs-moving", "");
     this.root.setAttribute("fs-direction", direction);
+    this.emit("transitionstart", detail);
     const duration = instant || this.prefersReducedMotion() ? 0 : this.options.speed;
+    let changed = false;
     try {
       if (origin.pageIndex === destination.pageIndex && destination.slideIndex !== null) {
         const horizon = this.horizons.get(destination.pageIndex);
         const flowView = resolveFlowView({ horizon, destination });
-        await this.transitionTo(
+        await transitionToIndex(
           horizon.swiper,
           destination.slideIndex,
           duration,
@@ -1095,99 +1771,131 @@ var FullScroll = class {
             this.flowView = flowView;
           }
         }
-        await this.transitionTo(this.rootSwiper, destination.pageIndex, duration);
+        await this.transitionToVerticalRoute(destination, duration);
       }
       if (this.destroyed || !this.active || transitionVersion !== this.transitionVersion) {
         return false;
       }
       this.currentIndex = nextIndex;
-      this.applyStepEntry(destination, origin);
+      this.routeState.applyStepEntry(destination, origin);
       this.syncState();
       resetRouteScroll(origin);
       if (updateHistory) {
-        this.writeHistory(destination);
+        this.location.write(destination);
       }
       this.emit("change", detail);
+      changed = true;
       return true;
+    } catch (error) {
+      if (!this.destroyed && this.active && transitionVersion === this.transitionVersion) {
+        try {
+          this.settleRuntimeRoute(origin);
+          this.syncState();
+        } catch (restoreError) {
+          this.warn(`\uC2E4\uD328\uD55C \uC774\uB3D9\uC744 \uBCF5\uAD6C\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4: ${restoreError.message}`);
+        }
+      }
+      throw error;
     } finally {
+      if (!changed) {
+        this.emit("transitioncancel", detail);
+      }
       this.moving = false;
       this.root.removeAttribute("fs-moving");
       this.root.removeAttribute("fs-direction");
-      this.scheduleWheelUnlock();
-      this.flushLocationChange();
+      this.input.scheduleWheelUnlock();
+      this.location.flush();
     }
   }
-  transitionTo(swiper, index, duration, flowOffset = null) {
-    if (!swiper) {
-      return Promise.resolve();
+  transitionToVerticalRoute(route, duration) {
+    const footerRoute = this.runtime?.footerRoute;
+    if (footerRoute) {
+      if (route.flowFooter) {
+        const lastPageIndex = footerRoute.pageIndex - 1;
+        return Promise.all([
+          transitionToIndex(this.rootSwiper, lastPageIndex, duration),
+          this.transitionFooterStage(true, duration)
+        ]);
+      }
+      if (this.routes[this.currentIndex]?.flowFooter) {
+        return Promise.all([
+          transitionToIndex(this.rootSwiper, route.pageIndex, duration),
+          this.transitionFooterStage(false, duration)
+        ]);
+      }
     }
-    if (flowOffset !== null && typeof swiper.translateTo === "function") {
-      swiper.slideTo(index, 0, false);
-      return this.transitionToTranslate(swiper, flowOffset, duration);
-    }
-    if (duration === 0 || swiper.activeIndex === index) {
-      swiper.slideTo(index, 0, false);
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(fallback);
-        swiper.off?.("transitionEnd", finish);
-        resolve();
-      };
-      const fallback = setTimeout(finish, duration + 180);
-      swiper.once?.("transitionEnd", finish);
-      swiper.slideTo(index, duration, true);
-    });
+    return transitionToIndex(this.rootSwiper, route.pageIndex, duration);
   }
-  transitionToTranslate(swiper, offset, duration) {
-    const translate2 = -offset;
+  settleRuntimeRoute(route) {
+    if (!route || !this.runtime) return;
+    this.flowView = null;
+    if (route.slideIndex !== null) {
+      const horizon = this.horizons.get(route.pageIndex);
+      horizon?.swiper?.slideTo(route.slideIndex, 0, false);
+      const flowView = resolveFlowView({ horizon, destination: route });
+      if (flowView) {
+        horizon.swiper.translateTo?.(-flowView.offset, 0, false, false);
+        this.flowView = flowView;
+      }
+    }
+    const footerRoute = this.runtime.footerRoute;
+    if (footerRoute) {
+      const showFooter = route.flowFooter;
+      this.rootSwiper?.slideTo(showFooter ? footerRoute.pageIndex - 1 : route.pageIndex, 0, false);
+      this.setFooterStageOffset(showFooter, 0);
+    } else {
+      this.rootSwiper?.slideTo(route.pageIndex, 0, false);
+    }
+  }
+  footerHeight() {
+    const footer = this.runtime?.footerRoute?.page;
+    if (!footer) return 0;
+    return footer.getBoundingClientRect?.().height || footer.offsetHeight || 0;
+  }
+  setFooterStageOffset(show, duration) {
+    const stage = this.runtime?.footerStage;
+    if (!stage) return;
+    stage.style.transitionDuration = `${duration}ms`;
+    stage.style.transform = `translate3d(0, ${show ? -this.footerHeight() : 0}px, 0)`;
+  }
+  transitionFooterStage(show, duration) {
+    const stage = this.runtime?.footerStage;
+    if (!stage) return Promise.resolve();
     if (duration === 0) {
-      swiper.translateTo(translate2, 0, false, false);
+      this.setFooterStageOffset(show, 0);
       return Promise.resolve();
     }
     return new Promise((resolve) => {
       let settled = false;
-      const finish = () => {
+      const finish = (event) => {
+        if (event && (event.target !== stage || event.propertyName !== "transform")) return;
         if (settled) return;
         settled = true;
         clearTimeout(fallback);
-        swiper.off?.("transitionEnd", finish);
+        stage.removeEventListener("transitionend", finish);
         resolve();
       };
       const fallback = setTimeout(finish, duration + 180);
-      swiper.once?.("transitionEnd", finish);
-      swiper.translateTo(translate2, duration, true, false);
+      stage.addEventListener("transitionend", finish);
+      requestAnimationFrame(() => this.setFooterStageOffset(show, duration));
     });
   }
   next(options = {}) {
-    const step = this.currentStepInfo();
+    const step = this.active ? this.currentStepInfo() : null;
     if (step && step.current < step.max) {
       return this.goToStep(step.current + 1, options);
     }
     return this.goToRoute(this.verticalTargetIndex("next"), options);
   }
   prev(options = {}) {
-    const step = this.currentStepInfo();
+    const step = this.active ? this.currentStepInfo() : null;
     if (step && step.current > 1) {
       return this.goToStep(step.current - 1, options);
     }
     return this.goToRoute(this.verticalTargetIndex("prev"), options);
   }
   currentStepInfo(route = this.routes[this.currentIndex]) {
-    if (!route?.stepElement || route.stepMax < 2) return null;
-    const current = clamp(this.stepStates.get(route.stepElement) ?? 1, 1, route.stepMax);
-    return { element: route.stepElement, current, max: route.stepMax, reentry: route.stepReentry ?? this.options.stepReentry };
-  }
-  applyStepEntry(destination, origin) {
-    const step = this.currentStepInfo(destination);
-    if (!step || step.element === origin?.stepElement) return;
-    if (step.reentry === "first") this.stepStates.set(step.element, 1);
-    else if (step.reentry === "last") this.stepStates.set(step.element, step.max);
-    else if (!this.stepStates.has(step.element)) this.stepStates.set(step.element, 1);
+    return this.routeState.stepInfo(route);
   }
   goToStep(targetStep, { trigger = "api" } = {}) {
     if (this.destroyed || !this.active || this.moving) return Promise.resolve(false);
@@ -1204,7 +1912,7 @@ var FullScroll = class {
       trigger
     };
     if (!this.emit("beforestepchange", detail, true)) return Promise.resolve(false);
-    this.stepStates.set(step.element, nextStep);
+    this.routeState.setStep(step.element, nextStep);
     this.syncState();
     this.emit("stepchange", detail);
     return Promise.resolve(true);
@@ -1246,98 +1954,6 @@ var FullScroll = class {
     const candidateIndex = clamp(Number(slideIndex) || 0, 0, candidates.length - 1);
     return this.goToRoute(candidates[candidateIndex].index, options);
   }
-  onWheel(event) {
-    if (!this.active || event.ctrlKey || closestWithin(this.root, event.target, "[fs-ignore]")) {
-      return;
-    }
-    const delta = normalizeWheelDelta(event);
-    const direction = Math.sign(delta);
-    if (!direction) {
-      return;
-    }
-    const now = performance.now();
-    if (closestWithin(this.root, event.target, WHEEL_INTERACTIVE_SELECTOR)) {
-      return;
-    }
-    const scrollAreas = getScrollAreas(this.root, event.target);
-    if (canAnyScroll(scrollAreas, direction)) {
-      this.lastNativeScrollAt = now;
-      this.wheelAccumulator = 0;
-      return;
-    }
-    event.preventDefault();
-    this.lastWheelAt = now;
-    if (scrollAreas.length > 0 && now - this.lastNativeScrollAt < this.options.wheelIdle) {
-      return;
-    }
-    if (this.wheelGestureLocked || this.moving) {
-      this.scheduleWheelUnlock();
-      return;
-    }
-    if (this.wheelDirection !== direction) {
-      this.wheelAccumulator = 0;
-      this.wheelDirection = direction;
-    }
-    this.wheelAccumulator += delta;
-    clearTimeout(this.wheelResetTimer);
-    this.wheelResetTimer = setTimeout(() => {
-      this.wheelAccumulator = 0;
-      this.wheelDirection = 0;
-    }, this.options.wheelIdle);
-    if (Math.abs(this.wheelAccumulator) < this.options.wheelThreshold) {
-      return;
-    }
-    this.wheelAccumulator = 0;
-    this.wheelGestureLocked = true;
-    const action = direction > 0 ? this.next({ trigger: "wheel" }) : this.prev({ trigger: "wheel" });
-    Promise.resolve(action).finally(() => this.scheduleWheelUnlock());
-  }
-  scheduleWheelUnlock() {
-    clearTimeout(this.wheelUnlockTimer);
-    const elapsed = performance.now() - this.lastWheelAt;
-    const delay = Math.max(0, this.options.wheelIdle - elapsed);
-    this.wheelUnlockTimer = setTimeout(() => {
-      if (this.moving) {
-        this.scheduleWheelUnlock();
-        return;
-      }
-      const idleFor = performance.now() - this.lastWheelAt;
-      if (idleFor < this.options.wheelIdle) {
-        this.scheduleWheelUnlock();
-        return;
-      }
-      this.wheelGestureLocked = false;
-      this.wheelDirection = 0;
-    }, delay);
-  }
-  onKeyDown(event) {
-    if (!this.active || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
-      return;
-    }
-    if (event.target instanceof Element && (event.target.matches(INTERACTIVE_SELECTOR) || closestWithin(this.root, event.target, "[fs-ignore]"))) {
-      return;
-    }
-    let action = null;
-    if (["ArrowDown", "PageDown"].includes(event.key) || event.code === "Space" && !event.shiftKey) {
-      action = () => this.next({ trigger: "keyboard" });
-    } else if (["ArrowUp", "PageUp"].includes(event.key) || event.code === "Space" && event.shiftKey) {
-      action = () => this.prev({ trigger: "keyboard" });
-    } else if (event.key === "ArrowRight") {
-      action = () => this.nextWithinHorizon("keyboard");
-    } else if (event.key === "ArrowLeft") {
-      action = () => this.prevWithinHorizon("keyboard");
-    } else if (event.key === "Home") {
-      action = () => this.goToRoute(0, { trigger: "keyboard" });
-    } else if (event.key === "End") {
-      action = () => this.goToRoute(this.routes.length - 1, { trigger: "keyboard" });
-    }
-    if (action) {
-      const result = action();
-      if (result !== false) {
-        event.preventDefault();
-      }
-    }
-  }
   nextWithinHorizon(trigger) {
     const current = this.routes[this.currentIndex];
     if (current?.slideIndex === null) return false;
@@ -1352,177 +1968,39 @@ var FullScroll = class {
     if (!previous || previous.pageIndex !== current.pageIndex) return false;
     return this.goToRoute(this.currentIndex - 1, { trigger });
   }
-  onPointerDown(event) {
-    if (!this.active || event.pointerType === "mouse" || event.pointerType === "touch" || !event.isPrimary || closestWithin(this.root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
-      return;
+  resizeRuntime() {
+    this.rootSwiper?.update?.();
+    for (const horizon of this.horizons.values()) {
+      horizon.swiper?.update?.();
     }
-    const scrollAreas = getScrollAreas(this.root, event.target);
-    this.pointer = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      target: event.target,
-      scrollAreas,
-      scrollSnapshot: captureScrollGesture(scrollAreas)
-    };
-  }
-  onPointerUp(event) {
-    if (!this.pointer || this.pointer.id !== event.pointerId || this.moving) {
-      this.pointer = null;
-      return;
-    }
-    const pointer = this.pointer;
-    this.pointer = null;
-    this.finishTouchGesture(pointer, event.clientX, event.clientY);
-  }
-  onPointerCancel() {
-    this.pointer = null;
-  }
-  onTouchStart(event) {
-    if (!this.active || event.touches.length > 1 || closestWithin(this.root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
-      return;
-    }
-    const point = event.changedTouches[0];
-    if (!point) return;
-    const scrollAreas = getScrollAreas(this.root, event.target);
-    this.touch = {
-      id: point.identifier,
-      x: point.clientX,
-      y: point.clientY,
-      target: event.target,
-      scrollAreas,
-      scrollSnapshot: captureScrollGesture(scrollAreas)
-    };
-  }
-  onTouchEnd(event) {
-    if (!this.touch || this.moving) {
-      this.touch = null;
-      return;
-    }
-    const touch = this.touch;
-    const point = Array.from(event.changedTouches).find((item) => item.identifier === touch.id);
-    if (!point) return;
-    this.touch = null;
-    this.finishTouchGesture(touch, point.clientX, point.clientY);
-  }
-  onTouchCancel() {
-    this.touch = null;
-  }
-  finishTouchGesture(gesture, clientX, clientY) {
-    const result = readGesture(gesture, clientX, clientY, this.options.touchThreshold);
-    if (!result) return;
-    const { direction, vertical: verticalGesture } = result;
-    if (verticalGesture && gesture.scrollAreas.length > 0) {
-      if (scrollGestureWasConsumed(gesture.scrollSnapshot) || canAnyScroll(gesture.scrollAreas, direction)) {
-        return;
-      }
-    }
-    const current = this.routes[this.currentIndex];
-    const horizon = current ? this.horizons.get(current.pageIndex) : null;
-    if (!verticalGesture && horizon?.only) {
-      if (direction > 0) this.nextWithinHorizon("touch");
-      else this.prevWithinHorizon("touch");
-      return;
-    }
-    if (direction > 0) this.next({ trigger: "touch" });
-    else this.prev({ trigger: "touch" });
-  }
-  onResize() {
-    clearTimeout(this.resizeTimer);
-    this.resizeTimer = setTimeout(() => {
-      if (this.destroyed || this.manualDisabled) return;
-      const shouldRespond = this.shouldUseResponsiveMode();
-      if (shouldRespond && !this.responsive) {
-        this.disableForResponsive();
-      } else if (!shouldRespond && this.responsive) {
-        this.enableFromResponsive();
-      } else if (this.active) {
-        this.rootSwiper?.update?.();
-        for (const horizon of this.horizons.values()) {
-          horizon.swiper?.update?.();
-        }
-        this.emit("resize", { width: window.innerWidth, height: window.innerHeight });
-      }
-    }, 120);
-  }
-  shouldUseResponsiveMode() {
-    return this.options.breakpoint > 0 && window.innerWidth <= this.options.breakpoint;
+    this.settleRuntimeRoute(this.routes[this.currentIndex]);
+    this.emit("resize", { width: window.innerWidth, height: window.innerHeight });
   }
   disableForResponsive() {
     this.teardownRuntime();
     this.responsive = true;
     this.root.setAttribute("fs-responsive", "");
-    this.scrollResponsiveTargetIntoView(false);
+    scrollRouteIntoView(this.routes[this.currentIndex], false);
     this.syncControls();
-    this.emit("responsive", { responsive: true });
+    this.emit("responsive", {
+      responsive: true,
+      current: this.publicRoute(this.routes[this.currentIndex])
+    });
   }
   enableFromResponsive() {
-    this.currentIndex = this.closestRouteToViewport();
+    this.currentIndex = closestRouteToViewport(this.routes, this.currentIndex);
     this.responsive = false;
     this.root.removeAttribute("fs-responsive");
     this.enableRuntime();
     this.syncControls();
-    this.emit("responsive", { responsive: false });
-  }
-  closestRouteToViewport() {
-    let bestIndex = clamp(this.currentIndex, 0, this.routes.length - 1);
-    let bestDistance = Number.POSITIVE_INFINITY;
-    this.routes.forEach((route, index) => {
-      const element = route.slide ?? route.page;
-      const distance = Math.abs(element.getBoundingClientRect().top);
-      if (distance < bestDistance) {
-        bestDistance = distance;
-        bestIndex = index;
-      }
+    this.emit("responsive", {
+      responsive: false,
+      current: this.publicRoute(this.routes[this.currentIndex])
     });
-    return bestIndex;
-  }
-  scrollResponsiveTargetIntoView(smooth) {
-    const route = this.routes[this.currentIndex];
-    const element = route?.slide ?? route?.page;
-    element?.scrollIntoView?.({ behavior: smooth ? "smooth" : "auto", block: "start" });
-  }
-  onLocationChange() {
-    const routeIndex = this.routeIndexFromLocation() ?? (window.location.hash ? null : 0);
-    if (routeIndex === null) return;
-    this.pendingLocationIndex = routeIndex;
-    this.flushLocationChange();
-  }
-  async flushLocationChange() {
-    if (this.destroyed || this.locationSyncing || this.moving) return;
-    this.locationSyncing = true;
-    try {
-      while (this.pendingLocationIndex !== null) {
-        const routeIndex = this.pendingLocationIndex;
-        this.pendingLocationIndex = null;
-        if (routeIndex === this.currentIndex) continue;
-        await this.goToRoute(routeIndex, {
-          trigger: "history",
-          updateHistory: false,
-          instant: !this.active
-        });
-      }
-    } finally {
-      this.locationSyncing = false;
-      if (this.pendingLocationIndex !== null && !this.moving) {
-        queueMicrotask(() => this.flushLocationChange());
-      }
-    }
   }
   onPageShow() {
-    this.onLocationChange();
-    this.onResize();
-  }
-  routeIndexFromLocation() {
-    return routeIndexFromHash(window.location.hash, this.anchorMap, this.routes);
-  }
-  writeHistory(route) {
-    if (!this.options.history || !route?.anchor || !window.history?.pushState) {
-      return;
-    }
-    const hash = hashForRoute(route);
-    if (window.location.hash === hash) return;
-    window.history.pushState(window.history.state, "", hash);
+    this.location.onChange();
+    this.viewport.refresh();
   }
   buildNavigation() {
     if (!this.options.dots || !this.active) {
@@ -1553,70 +2031,9 @@ var FullScroll = class {
     const viewName = route.anchor ?? String(route.pageIndex + 1);
     const view = route.slideIndex === null ? viewName : `${viewName}/${route.slideIndex + 1}`;
     this.root.setAttribute("fs-view", view);
-    this.syncStep(route);
-    this.syncTheme(route);
-    this.syncMedia(route);
-    this.syncAccessibility(route);
+    this.routeState.sync(route, this.pages, this.horizons, this.flowView);
     syncNavigation(this.root, this.horizons, route);
     this.syncControls();
-  }
-  syncStep(route) {
-    if (this.stepElement && this.stepElement !== route.stepElement) {
-      this.stepElement.removeAttribute("fs-step-current");
-    }
-    const step = this.currentStepInfo(route);
-    this.stepElement = step?.element ?? null;
-    if (step) step.element.setAttribute("fs-step-current", String(step.current));
-  }
-  syncMedia(route) {
-    const nextElement = route?.mediaElement ?? null;
-    if (nextElement === this.activeMediaElement) return;
-    pauseRouteMedia(this.activeMediaElement);
-    this.activeMediaElement = nextElement;
-    playRouteMedia(nextElement);
-  }
-  syncTheme(route) {
-    const theme = route.slide?.getAttribute("fs-theme") ?? route.page.getAttribute("fs-theme");
-    const targets = [this.root, ...this.themeTargets];
-    targets.forEach((target) => {
-      if (theme === null) {
-        if (target === this.root) target.removeAttribute("fs-theme");
-        else {
-          const originalTheme = this.themeSnapshots.get(target);
-          if (originalTheme === null) target.removeAttribute("fs-theme");
-          else target.setAttribute("fs-theme", originalTheme);
-        }
-      } else {
-        target.setAttribute("fs-theme", theme);
-      }
-    });
-  }
-  syncAccessibility(route) {
-    const visibleSlides = /* @__PURE__ */ new Set([route.slide]);
-    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.companion) {
-      visibleSlides.add(this.flowView.companion);
-    }
-    if (this.flowView?.pageIndex === route.pageIndex && this.flowView.flowSlide) {
-      visibleSlides.add(this.flowView.flowSlide);
-    }
-    const viewport = this.root.getBoundingClientRect?.();
-    const hasViewport = Boolean(viewport?.height);
-    for (const page of this.pages) {
-      const bounds = page.getBoundingClientRect?.();
-      const intersectsViewport = hasViewport && route.flow && bounds && bounds.bottom > viewport.top + 1 && bounds.top < viewport.bottom - 1;
-      this.setRuntimeInert(page, page !== route.page && !intersectsViewport);
-    }
-    for (const horizon of this.horizons.values()) {
-      for (const slide of horizon.slides) {
-        const inactive = horizon.page !== route.page || !visibleSlides.has(slide);
-        this.setRuntimeInert(slide, inactive);
-      }
-    }
-  }
-  setRuntimeInert(element, inactive) {
-    const original = this.snapshots.get(element)?.some(([name]) => name === "inert");
-    if (inactive || original) element.setAttribute("inert", "");
-    else element.removeAttribute("inert");
   }
   publicRoute(route) {
     return toPublicRoute(route);
@@ -1648,10 +2065,10 @@ var FullScroll = class {
     if (this.destroyed || !this.manualDisabled) return;
     this.manualDisabled = false;
     this.root.removeAttribute("fs-disabled");
-    if (this.shouldUseResponsiveMode()) {
+    if (this.viewport.matches()) {
       this.responsive = true;
       this.root.setAttribute("fs-responsive", "");
-      this.scrollResponsiveTargetIntoView(false);
+      scrollRouteIntoView(this.routes[this.currentIndex], false);
       this.syncControls();
     } else {
       this.enableRuntime();
@@ -1666,32 +2083,28 @@ var FullScroll = class {
     this.captureSnapshots();
     this.scan();
     this.setupControls();
-    this.setupThemeTargets();
+    this.routeState.setupThemeTargets();
     this.currentIndex = this.normalizeHorizonEntry(this.currentIndex);
-    if (wasActive && !this.shouldUseResponsiveMode() && !this.manualDisabled) {
+    if (wasActive && !this.viewport.matches() && !this.manualDisabled) {
       this.enableRuntime();
     } else {
       this.syncControls();
     }
+    this.emit("refresh", {
+      active: this.active,
+      responsive: this.responsive,
+      current: this.publicRoute(this.routes[this.currentIndex])
+    });
   }
   destroy() {
     if (this.destroyed) return;
     this.teardownRuntime();
-    clearTimeout(this.resizeTimer);
-    clearTimeout(this.wheelResetTimer);
-    clearTimeout(this.wheelUnlockTimer);
-    window.removeEventListener("resize", this.onResize);
-    window.removeEventListener("orientationchange", this.onResize);
-    window.removeEventListener("popstate", this.onLocationChange);
-    window.removeEventListener("hashchange", this.onLocationChange);
-    window.removeEventListener("pageshow", this.onPageShow);
+    this.removeGlobalListeners();
     this.root.removeAttribute("fs-responsive");
     this.root.removeAttribute("fs-disabled");
     this.controls?.destroy();
     this.controls = null;
-    this.restoreThemeTargets();
-    this.stepElement?.removeAttribute("fs-step-current");
-    this.stepElement = null;
+    this.routeState.destroy();
     this.destroyed = true;
     INSTANCES.delete(this.root);
     this.emit("destroy", {});

@@ -95,10 +95,12 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 | `[fs]` | FullScroll 루트. 1.3.0도 페이지당 한 개만 지원합니다. |
 | 루트 바로 아래 `section` | 별도 선언 없이 세로 페이지가 됩니다. |
 | `[fs-page]` | `section`이 아닌 요소를 세로 페이지로 쓸 때만 붙입니다. |
-| `[fs-horizon]` | 해당 페이지의 직계 요소 자식을 가로 슬라이드로 만듭니다. 최소 2개가 필요합니다. |
+| `[fs-horizon]` | 해당 페이지의 직계 요소 자식 중 `[fs-overlay]`가 아닌 요소를 가로 슬라이드로 만듭니다. 최소 2개가 필요합니다. |
+| `[fs-overlay]` | `[fs-horizon]`의 직계 자식일 때만 가로 그룹의 공용 레이어가 됩니다. route, slideIndex, history 경로와 가로 점 개수에서는 제외됩니다. |
 | `[fs-horizon-only]` | 가로 슬라이드는 좌우 입력으로만 이동합니다. 위·아래 입력은 현재 가로 슬라이드 위치를 무시하고 앞뒤 세로 페이지로 이동합니다. |
 | `[fs-horizon-first]` | 다른 세로 페이지에서 이 가로 그룹으로 들어올 때마다 첫 번째 슬라이드부터 시작합니다. |
 | `[fs-flow]` | 일반 세로 페이지는 자연 높이, `fs-horizon`의 직계 슬라이드는 자연 너비로 처리합니다. 붙이지 않은 요소는 기존 화면 크기를 유지합니다. |
+| `[fs-flow="footer"]` | 마지막 세로 페이지만 자연 높이로 하단 정렬합니다. 일반 세로 페이지의 `fs-effect`는 유지됩니다. |
 | `[fs-flow="prev,next"]` | 가로 Flow의 동반 방향을 진입·이탈 순서로 지정합니다. 값이 없으면 자연 크기만 적용합니다. |
 | `[fs-step="number"]` | 같은 영역에서 지정한 단계만큼 내부 연출을 진행한 뒤 다음 경로로 이동합니다. 일반 세로 섹션 또는 가로 그룹의 직계 슬라이드에 붙입니다. |
 | `[fs-step-reentry]` | 단계 섹션 재진입 시점의 상태입니다. `preserve`, `first`, `last` 중 하나입니다. |
@@ -112,6 +114,53 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 
 `[fs-horizon]` 내부에 다시 `[fs-horizon]`을 넣는 중첩 구조는 1.3.0에서 지원하지 않습니다.
 
+### 가로 공용 레이어
+
+슬라이드마다 반복하지 않을 제목, 링크, 화살표 같은 공용 UI는 `[fs-horizon]`의 직계 자식에 `[fs-overlay]`를 붙여 한 번만 작성합니다. overlay는 가로 wrapper 밖에서 현재 세로 페이지에 유지되며 여러 개를 둘 수 있습니다. `refresh()`와 `destroy()` 뒤에도 overlay와 슬라이드의 작성 순서가 복원됩니다. 더 깊은 자손에 붙인 `[fs-overlay]`에는 특별한 의미가 없습니다.
+
+```html
+<section fs-horizon fs-horizon-only fs-anchor="premium">
+  <aside fs-overlay class="premium-ui">
+    <h2>LUCKY PREMIUM</h2>
+    <a href="/premium">MORE</a>
+    <button type="button" data-premium-prev>이전</button>
+    <button type="button" data-premium-next>다음</button>
+  </aside>
+
+  <article>프리미엄 01</article>
+  <article>프리미엄 02</article>
+  <article>프리미엄 03</article>
+</section>
+```
+
+FullScroll의 기본 CSS는 활성 런타임에서만 `position: absolute`와 `z-index: 10`을 제공합니다. 위치, 크기와 디자인은 작성자 CSS로 정합니다. 생성되는 `.fs-nav-horizon`은 `z-index: 20`이므로 기본 overlay보다 위에 표시됩니다. overlay를 점보다 위에 둘 때는 작성자 CSS에서 z-index를 올리고 클릭 영역이 점을 가리지 않는지 함께 확인합니다. 반응형 문서 모드와 disabled 상태에서는 아래 위치 규칙이 적용되지 않아 overlay가 일반 콘텐츠 흐름으로 돌아갑니다.
+
+```css
+[fs][fs-ready] .premium-ui {
+  top: 48px;
+  right: 56px;
+  left: 56px;
+}
+```
+
+overlay 자체에는 `[fs-ignore]`가 암묵적으로 적용되지 않습니다. 링크와 버튼은 그대로 클릭하고 포커스할 수 있으며, 휠·터치 입력을 FullScroll에서 제외할 영역에만 기존 `[fs-ignore]`를 명시합니다. 사이트별 화살표는 새 속성 없이 기존 `moveTo(anchor, slideIndex)` API로 연결합니다.
+
+```js
+const premium = new FullScroll('[fs]', { Swiper, dots: true });
+
+document.querySelector('[data-premium-prev]').addEventListener('click', () => {
+  const index = premium.state.current.slideIndex ?? 0;
+  premium.moveTo('premium', index - 1);
+});
+
+document.querySelector('[data-premium-next]').addEventListener('click', () => {
+  const index = premium.state.current.slideIndex ?? 0;
+  premium.moveTo('premium', index + 1);
+});
+```
+
+`[fs-overlay]`는 독립 route나 GSAP scene이 아닙니다. `createGsapScenes()`는 계속 각 실제 슬라이드 안의 `[data-gsap]`만 처리합니다. 공용 레이어 자체의 연출은 작성자가 `fullscroll:change` 이벤트 등에 직접 연결합니다. 실제 예시는 [`examples/overlay-demo/index.html`](examples/overlay-demo/index.html)에서 확인할 수 있습니다.
+
 ### 가로 이동 예외
 
 `[fs-horizon-only]`는 가로 그룹을 세로 이동 안에 가두지 않습니다. 가로 그룹에 들어온 상태에서 휠, 위·아래 키, 세로 터치, `next()`/`prev()`를 사용하면 내부 가로 슬라이드를 건너뛰고 이전 또는 다음 세로 페이지로 이동합니다. 좌우 키와 가로 터치는 그룹 안의 슬라이드를 이동합니다. 다른 세로 페이지에서 그룹으로 들어올 때는 항상 첫 번째 슬라이드가 표시됩니다.
@@ -121,6 +170,8 @@ const fullscroll = new FullScroll('[fs]', { Swiper });
 ### 자연 크기 예외
 
 기본 섹션은 계속 화면 하나를 차지합니다. 콘텐츠가 짧은 세로 섹션에만 `[fs-flow]`를 붙이면 섹션 높이가 콘텐츠에 맞춰지고, 다음 섹션이 남은 화면에 보일 수 있습니다.
+
+마지막 footer처럼 직전 페이지와 섞여 보이면 `[fs-flow="footer"]`를 사용합니다. FullScroll은 일반 세로 페이지를 effect Swiper에 유지하고 footer를 전용 flow stage로 분리합니다. 따라서 일반 페이지 사이에서는 `depth`, `fade` 등의 루트 효과가 그대로 작동하고, footer 진입·이탈만 자연스러운 세로 slide로 처리됩니다. 이 값은 `[fs]`의 마지막 세로 페이지에서만 유효합니다.
 
 가로 그룹에서는 `[fs-flow]`가 붙은 직계 슬라이드만 자연 너비가 됩니다. 지정하지 않은 슬라이드는 기존처럼 화면 너비를 유지합니다.
 
@@ -195,6 +246,59 @@ new FullScroll('[fs]', { themeTarget: '#header, .quick, .btn_all' });
 
 `[fs-video]`는 활성 경로의 HTML `video`와 Vimeo·YouTube iframe에 재생을 요청하고, 경로를 떠나면 일시정지를 요청합니다. 브라우저 자동재생 정책상 무음(`muted`)과 `playsinline`을 권장합니다.
 
+## GSAP 콘텐츠 연출
+
+FullScroll의 세로·가로 이동은 계속 Swiper가 담당하고, GSAP은 실제 route 안쪽 콘텐츠만 연출합니다. GSAP은 FullScroll 번들에 포함하지 않으며 선택적 `@fullscroll/core/gsap` 엔트리로 연결합니다.
+
+```js
+import FullScroll from '@fullscroll/core';
+import { createGsapScenes } from '@fullscroll/core/gsap';
+import { gsap } from 'gsap';
+
+const fullscroll = new FullScroll('[fs]', { Swiper });
+const scenes = createGsapScenes(fullscroll, {
+  gsap,
+  animations: [{
+    selector: '[data-gsap]',
+    prepare: 'gsap',
+    from: { autoAlpha: 0, y: 32 },
+    to: { autoAlpha: 1, y: 0, duration: 0.7, ease: 'power3.out', stagger: 0.08 },
+    at: {
+      initial: 'manual',
+      enter: 'change',
+      leave: 'transitionstart'
+    },
+    reentry: 'always'
+  }]
+});
+
+window.addEventListener('load', () => scenes.playCurrent(), { once: true });
+```
+
+`animations`의 각 항목은 독립된 애니메이션 그룹입니다. 따라서 제목은 이동 시작과 동시에, 본문은 이동 완료 후처럼 한 route 안에서도 시작 시점을 나눌 수 있습니다. GSAP transform은 Swiper가 소유한 `.swiper-wrapper`와 `.swiper-slide`가 아니라 그 안쪽 콘텐츠에만 적용합니다.
+
+| 설정 | 값 | 동작 |
+| --- | --- | --- |
+| `prepare` | `gsap` | `from` 값을 즉시 적용해 진입 전 상태를 GSAP이 준비합니다. 기본값입니다. |
+| `prepare` | `css` | 초기 표시 상태를 작성자 CSS에 맡기며, 어댑터 생성 시 인라인 시작 스타일을 적용하지 않습니다. |
+| `at.initial` | `ready` / `manual` | 최초 현재 route를 즉시 재생하거나 `playCurrent()` 호출까지 기다립니다. 기본값은 `ready`입니다. |
+| `at.enter` | `transitionstart` / `change` | 목적지 이동 시작 또는 이동 완료 시 진입합니다. 기본값은 `change`입니다. |
+| `at.leave` | `transitionstart` / `change` / `none` | 출발 route의 이탈 처리 시점입니다. 기본값은 `transitionstart`입니다. |
+
+`prepare: 'css'`에서는 선택자가 처음에 어떻게 보일지 CSS가 전적으로 결정합니다. CSS로 영구 숨김 처리하면 JavaScript가 실패했을 때 콘텐츠도 계속 숨겨질 수 있으므로 실패 안전성이 필요하면 기본 표시 상태를 유지하거나 별도 활성 클래스를 사용합니다.
+
+`playCurrent()`는 `at.initial: 'manual'`인 현재 route 그룹만 최초 한 번 시작합니다. 로더 종료, 이미지·폰트 준비 등 사이트가 원하는 시점에 호출하면 됩니다. 다른 route의 진입은 각 그룹의 `at.enter` 설정을 따릅니다.
+
+재진입 정책은 각 그룹별로 세 가지를 제공합니다.
+
+| `reentry` | 동작 |
+| --- | --- |
+| `always` | 들어올 때마다 진입 연출을 처음부터 다시 재생하고, 떠날 때 역재생합니다. |
+| `once` | 최초 진입에서만 재생하고, 이후에는 최종 상태로 즉시 표시합니다. |
+| `preserve` | 떠날 때 현재 연출 상태를 유지하고 다시 들어와도 강제로 초기화하지 않습니다. |
+
+`from` 기본값은 `{ autoAlpha: 0, y: 32 }`, `to` 기본값은 `{ autoAlpha: 1, y: 0, duration: 0.7, ease: 'power3.out', stagger: 0.08 }`입니다. `respectReducedMotion`은 기본값이 `true`이며 `prefers-reduced-motion: reduce`에서는 duration, delay, stagger를 0으로 처리합니다. `refresh()`와 `destroy()` 시 어댑터가 GSAP context를 되돌립니다.
+
 ## 슬라이드 전환 효과
 
 기본은 `slide`입니다. `[fs]`에 지정하면 세로 전환과 별도 지정이 없는 가로 그룹의 기본값이 되고, `[fs-horizon]`에 지정하면 해당 가로 그룹만 바꿉니다.
@@ -220,7 +324,7 @@ new FullScroll('[fs]', { themeTarget: '#header, .quick, .btn_all' });
 
 `blur`는 별도 자산 없이 적용되며, Fade 전환에 흐림과 미세 확대를 더합니다.
 
-`fs-flow`가 있는 세로 루트 또는 가로 그룹은 자연 크기와 인접 슬라이드 노출을 보존하기 위해 항상 `slide`로 동작합니다. `fs-effect`, `effect`, `verticalSwiper.effect`, `horizontalSwiper.effect`보다 우선합니다.
+일반 `fs-flow`가 있는 세로 루트 또는 가로 그룹은 자연 크기와 인접 슬라이드 노출을 보존하기 위해 `slide`로 동작합니다. 단, 마지막 `[fs-flow="footer"]`는 전용 flow stage로 분리되므로 일반 세로 페이지의 `fs-effect`, `effect`, `verticalSwiper.effect`를 강제 변경하지 않습니다.
 
 효과 모듈과 CSS는 FullScroll에 포함하지 않습니다. 모듈 환경에서는 필요한 Swiper 효과 모듈과 CSS를 직접 불러오고, 가장 간단하게는 `swiper/bundle` 및 `swiper/css/bundle`을 사용하면 됩니다.
 
@@ -264,7 +368,7 @@ new FullScroll('[fs]', {
 
 | 옵션 | 기본값 | 설명 |
 | --- | ---: | --- |
-| `speed` | `700` | Swiper 전환 시간(ms) |
+| `speed` | `1200` | Swiper 전환 시간(ms) |
 | `easing` | `cubic-bezier(0.22, 1, 0.36, 1)` | 전체 슬라이드 전환 타이밍 함수 |
 | `breakpoint` | `0` | 이 너비 이하에서 일반 세로 문서로 전환. `0`은 사용 안 함 |
 | `wheelThreshold` | `40` | 한 번의 이동으로 인정할 휠 누적값 |
@@ -273,6 +377,8 @@ new FullScroll('[fs]', {
 | `dots` | `false` | 세로·가로 점 내비게이션 생성 여부 |
 | `history` | `true` | `fs-anchor`가 있을 때 URL 해시 기록 여부 |
 | `effect` | `'slide'` | 루트 및 별도 지정 없는 가로 그룹의 전환 효과 |
+| `stepReentry` | `'preserve'` | 단계 페이지 재진입 시 `preserve`, `first`, `last` 정책 |
+| `themeTarget` | `null` | 현재 `[fs-theme]`를 함께 반영할 외부 요소 선택자 |
 | `Swiper` | 전역 `Swiper` | 모듈 환경에서 전달할 Swiper 생성자 |
 | `verticalSwiper` | `{}` | 세로 Swiper에 추가할 옵션 |
 | `horizontalSwiper` | `{}` | 모든 가로 Swiper에 추가할 옵션 |
@@ -299,6 +405,8 @@ console.log(FullScroll.version);
 
 페이지 번호와 가로 번호는 API에서 모두 0부터 시작합니다.
 
+`fullscroll.state.routes`는 현재 FullScroll이 인식한 전체 세로·가로 공개 route 목록입니다. `refresh()` 뒤에는 추가·제거된 route가 반영된 새 읽기 전용 배열을 반환합니다.
+
 ## 이벤트
 
 이벤트는 `[fs]` 루트에서 버블링합니다.
@@ -316,7 +424,9 @@ root.addEventListener('fullscroll:change', (event) => {
 });
 ```
 
-지원 이벤트: `fullscroll:ready`, `fullscroll:beforechange`, `fullscroll:change`, `fullscroll:responsive`, `fullscroll:resize`, `fullscroll:destroy`.
+지원 이벤트: `fullscroll:ready`, `fullscroll:beforechange`, `fullscroll:transitionstart`, `fullscroll:transitioncancel`, `fullscroll:change`, `fullscroll:beforestepchange`, `fullscroll:stepchange`, `fullscroll:responsive`, `fullscroll:resize`, `fullscroll:refresh`, `fullscroll:destroy`.
+
+GSAP 연동은 각 애니메이션 그룹의 `at.enter`와 `at.leave`에 따라 `transitionstart` 또는 `change`에서 실행합니다. `transitioncancel`에서는 origin과 취소된 destination의 직전 진행 상태를 복구합니다. `responsive`와 `refresh`의 `detail.current`에는 현재 공개 경로가 포함됩니다.
 
 ## 런타임 상태 꾸미기
 
@@ -365,7 +475,12 @@ npm run check
 
 ### 소스 구조
 
-- `src/fullscroll.js`: 생명주기, Swiper 생성과 이동 조정
+- `src/fullscroll.js`: 공개 API, 생명주기와 경로 이동 조정
+- `src/runtime.js`: Swiper DOM·인스턴스 생성과 작성자 DOM 원상복구
+- `src/input.js`: 휠·키보드·포인터·터치 입력 상태와 런타임 리스너
+- `src/location.js`: 해시 읽기·기록과 브라우저 위치 이벤트 직렬화
+- `src/responsive.js`: breakpoint 감지와 뷰포트 기준 경로 선택
+- `src/transitions.js`: Swiper 전환 완료와 안전 타임아웃 처리
 - `src/flow.js`: 자연 크기 동반 뷰와 Swiper 위치 계산
 - `src/config.js`: 버전, 기본 옵션, 입력 예외 선택자
 - `src/dom.js`: DOM 탐색과 작성자 속성 복원
@@ -373,14 +488,18 @@ npm run check
 - `src/scroll.js`: 페이지 자체·중첩 스크롤 탐색과 경계 판정
 - `src/gestures.js`: 휠 정규화와 터치 방향 판정
 - `src/routes.js`: 페이지·가로 그룹 경로, 자연 크기 규칙과 URL 해시 변환
+- `src/route-state.js`: 현재 경로의 단계·테마·미디어·비활성 상태 동기화
 - `src/navigation.js`: 점 내비게이션 생성과 활성 상태 동기화
+- `src/media.js`: 활성 경로의 video·YouTube·Vimeo 재생 상태 동기화
+- `src/gsap.js`: GSAP 선택적 콘텐츠 연출 어댑터
 
 현재 기능별 검증 상태는 `FEATURES.md`에서 확인할 수 있습니다.
 
-실제 예제는 아래 두 가지입니다.
+대표 예제는 아래와 같습니다.
 
 - `examples/index.html`: 720px 이하에서 일반 세로 문서로 전환하는 반응형 데모
 - `examples/mobile/index.html`: Swiper CSS·Swiper JS·FullScroll JS까지 포함한 단일 파일 모바일 데모
-- `examples/flow-demo/index.html`: 세로 자연 높이와 가로 선택형 자연 너비 데모
+- `examples/flow-demo/index.html`: 세로 자연 높이, 가로 선택형 자연 너비와 전용 footer stage 데모
+- `examples/overlay-demo/index.html`: route에서 제외되는 가로 공용 제목·링크·이동 버튼 데모
 
 개선 방향은 `ROADMAP.md`, 다른 AI 작업자의 적용 규칙은 `AI_GUIDE.md`를 참고하세요.

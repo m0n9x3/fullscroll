@@ -23,8 +23,32 @@ const DEFAULTS = Object.freeze({
   horizontalSwiper: {},
 });
 
+const STEP_REENTRIES = new Set(['preserve', 'first', 'last']);
+
+function requireObject(value, name) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`[FullScroll] ${name}은 객체여야 합니다.`);
+  }
+}
+
+function requireNumber(value, name, { positive = false } = {}) {
+  const valid = Number.isFinite(value) && (positive ? value > 0 : value >= 0);
+  if (!valid) {
+    const range = positive ? '0보다 큰 유한한 숫자' : '0 이상의 유한한 숫자';
+    throw new TypeError(`[FullScroll] ${name}은 ${range}여야 합니다.`);
+  }
+}
+
 export function createOptions(options = {}) {
-  return {
+  requireObject(options, 'options');
+  if (options.verticalSwiper !== undefined) {
+    requireObject(options.verticalSwiper, 'verticalSwiper');
+  }
+  if (options.horizontalSwiper !== undefined) {
+    requireObject(options.horizontalSwiper, 'horizontalSwiper');
+  }
+
+  const resolved = {
     ...DEFAULTS,
     ...options,
     verticalSwiper: {
@@ -36,4 +60,22 @@ export function createOptions(options = {}) {
       ...(options.horizontalSwiper ?? {}),
     },
   };
+
+  requireNumber(resolved.speed, 'speed');
+  requireNumber(resolved.breakpoint, 'breakpoint');
+  requireNumber(resolved.wheelThreshold, 'wheelThreshold', { positive: true });
+  requireNumber(resolved.wheelIdle, 'wheelIdle', { positive: true });
+  requireNumber(resolved.touchThreshold, 'touchThreshold', { positive: true });
+
+  if (typeof resolved.easing !== 'string' || !resolved.easing.trim()) {
+    throw new TypeError('[FullScroll] easing은 비어 있지 않은 문자열이어야 합니다.');
+  }
+  if (typeof resolved.dots !== 'boolean' || typeof resolved.history !== 'boolean') {
+    throw new TypeError('[FullScroll] dots와 history는 boolean이어야 합니다.');
+  }
+  if (!STEP_REENTRIES.has(resolved.stepReentry)) {
+    throw new TypeError('[FullScroll] stepReentry는 preserve, first, last 중 하나여야 합니다.');
+  }
+
+  return resolved;
 }

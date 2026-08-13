@@ -16,6 +16,14 @@ await Promise.all([
     target: ['es2020'],
   }),
   build({
+    entryPoints: ['src/gsap.js'],
+    bundle: true,
+    format: 'esm',
+    outfile: 'dist/gsap.esm.js',
+    sourcemap: true,
+    target: ['es2020'],
+  }),
+  build({
     entryPoints: ['src/browser.js'],
     bundle: true,
     format: 'iife',
@@ -48,3 +56,4 @@ await Promise.all([
 ]);
 
 await cp('src/fullscroll.d.ts', 'dist/fullscroll.d.ts');
+await cp('src/gsap.d.ts', 'dist/gsap.d.ts');

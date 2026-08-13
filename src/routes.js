@@ -1,4 +1,4 @@
-import { clamp, getDirectElements, getDirectPages } from './dom.js';
+import { clamp, getDirectHorizonChildren, getDirectPages } from './dom.js';
 import { EFFECT_NAMES, isEffectName } from './effects.js';
 
 const FLOW_RELATIONS = new Set(['prev', 'next']);
@@ -13,16 +13,27 @@ function readEffect(element, warn) {
   return null;
 }
 
-function readFlowSettings(element, warn, { allowRelations = true } = {}) {
+function readFlowSettings(element, warn, { allowRelations = true, allowFooter = false } = {}) {
   const flow = element.hasAttribute('fs-flow');
   const settings = {
     flow,
+    flowFooter: false,
     flowEnterSide: null,
     flowExitSide: null,
   };
 
   const rawValue = element.getAttribute('fs-flow')?.trim().toLowerCase() || '';
   if (!rawValue) return settings;
+
+  if (rawValue === 'footer') {
+    if (allowFooter) {
+      settings.flowFooter = true;
+    } else {
+      settings.flow = false;
+      warn('fs-flow="footer"는 [fs]의 마지막 세로 페이지에만 사용할 수 있습니다.');
+    }
+    return settings;
+  }
 
   if (!allowRelations) {
     warn('fs-flow의 방향값은 fs-horizon의 직계 fs-flow 슬라이드에서만 사용할 수 있습니다.');
@@ -66,8 +77,11 @@ function readStepSettings(element, warn) {
   return settings;
 }
 
-function createRoute({ routes, page, pageIndex, slide = null, slideIndex = null, anchor, horizon, warn }) {
-  const flow = readFlowSettings(slide ?? page, warn, { allowRelations: slide !== null });
+function createRoute({ routes, page, pageIndex, pageCount, slide = null, slideIndex = null, anchor, horizon, warn }) {
+  const flow = readFlowSettings(slide ?? page, warn, {
+    allowRelations: slide !== null,
+    allowFooter: slide === null && pageIndex === pageCount - 1,
+  });
   const step = readStepSettings(slide ?? page, warn);
 
   return {
@@ -112,7 +126,9 @@ export function scanRoutes(root, warn) {
       }
     }
 
-    const slides = page.hasAttribute('fs-horizon') ? getDirectElements(page) : [];
+    const { slides, overlays } = page.hasAttribute('fs-horizon')
+      ? getDirectHorizonChildren(page)
+      : { slides: [], overlays: [] };
     const isHorizon = slides.length >= 2;
 
     if (page.hasAttribute('fs-flow') && isHorizon) {
@@ -130,7 +146,7 @@ export function scanRoutes(root, warn) {
     }
 
     if (!isHorizon) {
-      routes.push(createRoute({ routes, page, pageIndex, anchor, warn }));
+      routes.push(createRoute({ routes, page, pageIndex, pageCount: pages.length, anchor, warn }));
       return;
     }
 
@@ -138,6 +154,7 @@ export function scanRoutes(root, warn) {
       page,
       pageIndex,
       slides,
+      overlays,
       wrapper: null,
       swiper: null,
       nav: null,
@@ -149,7 +166,7 @@ export function scanRoutes(root, warn) {
     horizons.set(pageIndex, horizon);
 
     slides.forEach((slide, slideIndex) => {
-      const route = createRoute({ routes, page, pageIndex, slide, slideIndex, anchor, horizon, warn });
+      const route = createRoute({ routes, page, pageIndex, pageCount: pages.length, slide, slideIndex, anchor, horizon, warn });
       routes.push(route);
       horizon.routes.push(route);
     });
@@ -162,21 +179,26 @@ export function routeIndexFromHash(hash, anchorMap, routes) {
   const rawHash = hash.replace(/^#/, '');
   if (!rawHash) return null;
 
-  let decoded;
+  const separator = rawHash.indexOf('/');
+  const rawAnchor = separator === -1 ? rawHash : rawHash.slice(0, separator);
+  const rawSlide = separator === -1 ? '' : rawHash.slice(separator + 1);
+  if (rawSlide.includes('/')) return null;
+
+  let anchor;
   try {
-    decoded = decodeURIComponent(rawHash);
+    anchor = decodeURIComponent(rawAnchor);
   } catch {
     return null;
   }
 
-  const [anchor, rawSlide] = decoded.split('/');
   const pageIndex = anchorMap.get(anchor);
   if (pageIndex === undefined) return null;
 
   const candidates = routes.filter((route) => route.pageIndex === pageIndex);
-  const humanSlide = Number.parseInt(rawSlide, 10);
-  const slideIndex = Number.isFinite(humanSlide)
-    ? clamp(humanSlide - 1, 0, candidates.length - 1)
+  if (separator !== -1 && !/^[1-9]\d*$/.test(rawSlide)) return null;
+
+  const slideIndex = rawSlide
+    ? clamp(Number(rawSlide) - 1, 0, candidates.length - 1)
     : 0;
   return candidates[slideIndex].index;
 }
@@ -197,6 +219,7 @@ export function toPublicRoute(route) {
     page: route.page,
     slide: route.slide,
     flow: route.flow,
+    flowFooter: route.flowFooter,
     flowEnterSide: route.flowEnterSide,
     flowExitSide: route.flowExitSide,
     horizonOnly: route.horizonOnly,

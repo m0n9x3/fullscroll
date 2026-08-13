@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FullScroll fs-overlay 데모</title>
+    <link rel="stylesheet" href="../../node_modules/swiper/swiper-bundle.min.css">
+    <link rel="stylesheet" href="../../dist/fullscroll.css">
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #090b10; color: #f7f4ed; font-family: Inter, Pretendard, system-ui, sans-serif; }
+      button, a { font: inherit; }
+      .page { display: grid; min-height: 100vh; min-height: 100dvh; place-items: center; padding: 8vw; background: #151923; text-align: center; }
+      .page h1, .page h2 { max-width: 900px; margin: 0; font-size: clamp(48px, 8vw, 120px); line-height: .92; letter-spacing: -.075em; }
+      .page p { max-width: 660px; margin: 22px 0 0; color: #bdc3ce; font-size: clamp(16px, 1.6vw, 22px); line-height: 1.65; }
+      .premium-page { position: relative; background: #090b10; }
+      .premium-ui { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; padding: 22px 24px; border: 1px solid rgb(255 255 255 / 18%); border-radius: 18px; background: rgb(9 11 16 / 76%); box-shadow: 0 18px 60px rgb(0 0 0 / 25%); backdrop-filter: blur(18px); }
+      [fs][fs-ready] .premium-ui { top: 34px; right: clamp(28px, 5vw, 88px); left: clamp(28px, 5vw, 88px); }
+      .premium-title { min-width: 0; }
+      .eyebrow { margin: 0 0 7px; color: #d9a95d; font-size: 12px; font-weight: 800; letter-spacing: .22em; text-transform: uppercase; }
+      .premium-title h2 { margin: 0; font-family: Georgia, serif; font-size: clamp(25px, 3vw, 48px); font-weight: 500; letter-spacing: -.045em; }
+      .premium-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; }
+      .premium-actions a, .premium-actions button { display: inline-grid; min-width: 46px; min-height: 46px; place-items: center; border: 1px solid rgb(255 255 255 / 28%); border-radius: 999px; background: rgb(255 255 255 / 7%); color: inherit; cursor: pointer; text-decoration: none; }
+      .premium-actions a { padding: 0 18px; color: #e7c180; font-size: 12px; font-weight: 800; letter-spacing: .12em; }
+      .premium-actions button:hover, .premium-actions a:hover { background: rgb(255 255 255 / 16%); }
+      .premium-actions button:focus-visible, .premium-actions a:focus-visible { outline: 3px solid #e7c180; outline-offset: 3px; }
+      .premium-actions button:disabled { cursor: default; opacity: .3; }
+      .premium-status { min-width: 58px; color: #c8cbd2; font-variant-numeric: tabular-nums; text-align: center; }
+      .premium-card { display: grid; min-height: 100vh; min-height: 100dvh; place-items: end start; padding: clamp(190px, 28vh, 300px) clamp(32px, 8vw, 150px) clamp(58px, 10vh, 110px); overflow: hidden; }
+      .premium-card:focus-visible { outline: 3px solid #e7c180; outline-offset: -8px; }
+      .premium-card:nth-of-type(1) { background: radial-gradient(circle at 72% 30%, #8b5e3c 0, transparent 30%), linear-gradient(135deg, #17110e, #3e281d); }
+      .premium-card:nth-of-type(2) { background: radial-gradient(circle at 70% 25%, #4f6477 0, transparent 30%), linear-gradient(135deg, #0c1218, #243543); }
+      .premium-card:nth-of-type(3) { background: radial-gradient(circle at 72% 28%, #695271 0, transparent 30%), linear-gradient(135deg, #160f19, #39283e); }
+      .card-copy { max-width: 760px; }
+      .card-number { margin: 0 0 18px; color: #e7c180; font-size: 13px; font-weight: 800; letter-spacing: .2em; }
+      .card-copy h3 { margin: 0; font-family: Georgia, serif; font-size: clamp(54px, 9vw, 142px); font-weight: 500; line-height: .86; letter-spacing: -.065em; }
+      .card-copy p { max-width: 520px; margin: 24px 0 0; color: rgb(255 255 255 / 68%); font-size: clamp(16px, 1.5vw, 21px); line-height: 1.6; }
+      .demo-link { position: fixed; right: 18px; bottom: 18px; z-index: 40; padding: 9px 13px; border-radius: 999px; background: rgb(0 0 0 / 50%); color: #fff; font-size: 13px; text-decoration: none; }
+      .qa-tools { position: fixed; bottom: 18px; left: 18px; z-index: 50; display: flex; gap: 8px; }
+      .qa-tools[hidden] { display: none; }
+      .qa-tools button { padding: 8px 11px; border: 1px solid rgb(255 255 255 / 25%); border-radius: 999px; background: #111827; color: #fff; cursor: pointer; }
+      @media (max-width: 720px) {
+        .premium-page { padding: 18px; }
+        .premium-ui { flex-direction: column; margin-bottom: 18px; background: #151923; }
+        .premium-actions { flex-wrap: wrap; }
+        .premium-card { min-height: 78vh; margin-bottom: 14px; padding: 80px 24px 42px; border-radius: 18px; }
+        .demo-link { position: static; display: inline-block; margin: 18px; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="demo-link" href="../docs/" fs-ignore>기능 문서</a>
+    <div class="qa-tools" data-qa-tools hidden>
+      <button type="button" data-qa-refresh>refresh()</button>
+      <button type="button" data-qa-destroy>destroy()</button>
+      <button type="button" data-qa-recreate>recreate</button>
+      <button type="button" data-qa-touch-prev>touch prev</button>
+    </div>
+    <main fs tabindex="-1">
+      <section class="page" fs-anchor="intro">
+        <div>
+          <h1>Shared UI.<br>Moving stories.</h1>
+          <p>아래로 이동한 뒤 좌우 키, 가로 스와이프 또는 공용 화살표로 실제 카드만 전환해 보세요.</p>
+        </div>
+      </section>
+
+      <section class="premium-page" fs-horizon fs-horizon-only fs-anchor="premium">
+        <aside fs-overlay class="premium-ui">
+          <div class="premium-title">
+            <p class="eyebrow">FullScroll overlay</p>
+            <h2>LUCKY PREMIUM</h2>
+          </div>
+          <div class="premium-actions">
+            <a href="#after">MORE</a>
+            <button type="button" data-premium-prev aria-label="이전 프리미엄">←</button>
+            <output class="premium-status" data-premium-status aria-live="polite">01 / 03</output>
+            <button type="button" data-premium-next aria-label="다음 프리미엄">→</button>
+          </div>
+        </aside>
+
+        <article class="premium-card" tabindex="0">
+          <div class="card-copy"><p class="card-number">PREMIUM 01</p><h3>Private<br>Garden</h3><p>공용 제목과 컨트롤은 그대로 있고 이 카드만 수평으로 이동합니다.</p></div>
+        </article>
+        <article class="premium-card" tabindex="0">
+          <div class="card-copy"><p class="card-number">PREMIUM 02</p><h3>Quiet<br>Lounge</h3><p>overlay는 두 번째 route가 아니므로 현재 slideIndex는 정확히 1입니다.</p></div>
+        </article>
+        <article class="premium-card" tabindex="0">
+          <div class="card-copy"><p class="card-number">PREMIUM 03</p><h3>Night<br>Library</h3><p>가로 점도 실제 카드 수와 같은 세 개만 생성됩니다.</p></div>
+        </article>
+      </section>
+
+      <section class="page" fs-anchor="after">
+        <div><h2>One page.<br>No extra route.</h2><p>상하 이동에서 overlay 때문에 중간 경로가 추가되지 않습니다.</p></div>
+      </section>
+    </main>
+
+    <script src="../../node_modules/swiper/swiper-bundle.min.js"></script>
+    <script src="../../dist/fullscroll.js"></script>
+    <script>
+      let demo = new FullScroll('[fs]', { Swiper, dots: true, history: true, breakpoint: 720 });
+      const previous = document.querySelector('[data-premium-prev]');
+      const next = document.querySelector('[data-premium-next]');
+      const status = document.querySelector('[data-premium-status]');
+
+      function syncOverlay() {
+        const route = demo.state.current;
+        const active = route?.anchor === 'premium' && route.slideIndex !== null;
+        const index = active ? route.slideIndex : 0;
+        const total = demo.horizons.get(1)?.slides.length ?? 3;
+        previous.disabled = !active || index === 0;
+        next.disabled = !active || index === total - 1;
+        status.value = `${String(index + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+        status.textContent = status.value;
+      }
+
+      previous.addEventListener('click', () => demo.moveTo('premium', (demo.state.current.slideIndex ?? 0) - 1));
+      next.addEventListener('click', () => demo.moveTo('premium', (demo.state.current.slideIndex ?? 0) + 1));
+      document.querySelector('[fs]').addEventListener('fullscroll:change', syncOverlay);
+      document.querySelector('[fs]').addEventListener('fullscroll:refresh', syncOverlay);
+      document.querySelector('[data-qa-refresh]').addEventListener('click', () => demo.refresh());
+      document.querySelector('[data-qa-destroy]').addEventListener('click', () => demo.destroy());
+      document.querySelector('[data-qa-recreate]').addEventListener('click', () => {
+        demo = new FullScroll('[fs]', { Swiper, dots: true, history: true, breakpoint: 720 });
+        window.overlayDemo = demo;
+        syncOverlay();
+      });
+      document.querySelector('[data-qa-touch-prev]').addEventListener('click', () => {
+        const target = document.querySelector('[fs-horizon] .swiper-slide-active');
+        const start = new Event('touchstart', { bubbles: true, cancelable: true });
+        const end = new Event('touchend', { bubbles: true, cancelable: true });
+        const startPoint = { identifier: 1, clientX: 520, clientY: 500 };
+        const endPoint = { identifier: 1, clientX: 880, clientY: 500 };
+        Object.defineProperties(start, {
+          touches: { value: [startPoint] },
+          targetTouches: { value: [startPoint] },
+          changedTouches: { value: [startPoint] },
+        });
+        Object.defineProperties(end, {
+          touches: { value: [] },
+          targetTouches: { value: [] },
+          changedTouches: { value: [endPoint] },
+        });
+        target.dispatchEvent(start);
+        target.dispatchEvent(end);
+      });
+      if (new URLSearchParams(window.location.search).has('qa')) {
+        document.querySelector('[data-qa-tools]').hidden = false;
+      }
+      window.overlayDemo = demo;
+      syncOverlay();
+    </script>
+  </body>
+</html>

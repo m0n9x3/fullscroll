@@ -135,6 +135,63 @@ describe('FullScroll 1.3.0', () => {
     globalThis.Swiper = previousSwiper;
   });
 
+  it('rolls back DOM and registry state when runtime construction fails', () => {
+    const root = mount();
+    const originalMarkup = root.innerHTML;
+
+    class FailingSwiper {
+      constructor() {
+        throw new Error('runtime failed');
+      }
+    }
+
+    expect(() => new FullScroll(root, { Swiper: FailingSwiper })).toThrow('runtime failed');
+    expect(FullScroll.get(root)).toBeNull();
+    expect(root.innerHTML).toBe(originalMarkup);
+    expect(root.hasAttribute('fs-ready')).toBe(false);
+    expect(root.querySelector('.swiper-wrapper')).toBeNull();
+  });
+
+  it('rolls back every Swiper when initial Flow positioning fails', () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <article fs-flow="next">Flow</article>
+          <article>Companion</article>
+        </section>
+        <section>After</section>
+      </main>
+    `);
+    const horizon = root.firstElementChild;
+    const [flow, companion] = horizon.children;
+    Object.defineProperty(horizon, 'clientWidth', { configurable: true, value: 800 });
+    Object.defineProperties(flow, {
+      offsetLeft: { configurable: true, value: 0 },
+      offsetWidth: { configurable: true, value: 320 },
+    });
+    Object.defineProperties(companion, {
+      offsetLeft: { configurable: true, value: 320 },
+      offsetWidth: { configurable: true, value: 800 },
+    });
+    const originalMarkup = root.innerHTML;
+
+    class FlowFailingSwiper extends FakeSwiper {
+      translateTo(...args) {
+        if (this.isHorizontal()) throw new Error('flow positioning failed');
+        super.translateTo(...args);
+      }
+    }
+
+    expect(() => new FullScroll(root, { Swiper: FlowFailingSwiper })).toThrow(
+      'flow positioning failed',
+    );
+    expect(FullScroll.get(root)).toBeNull();
+    expect(root.innerHTML).toBe(originalMarkup);
+    expect(root.querySelector('.swiper-wrapper')).toBeNull();
+    expect(FakeSwiper.instances).toHaveLength(2);
+    expect(FakeSwiper.instances.every((swiper) => swiper.destroyed)).toBe(true);
+  });
+
   it('returns the existing instance for the same root', () => {
     const root = mount();
     const instance = create(root);
@@ -169,6 +226,102 @@ describe('FullScroll 1.3.0', () => {
     expect(root.style.getPropertyValue('--fs-easing')).toBe('cubic-bezier(0.22, 1, 0.36, 1)');
   });
 
+  it('exposes the complete immutable public route list through state', () => {
+    const root = mount();
+    const instance = create(root);
+    const { routes } = instance.state;
+
+    expect(routes).toHaveLength(instance.state.total);
+    expect(routes.map((route) => route.index)).toEqual([0, 1, 2, 3, 4]);
+    expect(routes[0].slide).toBe(instance.state.current.slide);
+    expect(Object.isFrozen(routes)).toBe(true);
+    expect(Object.isFrozen(routes[0])).toBe(true);
+  });
+
+  it('keeps fs-overlay outside the horizontal wrapper, routes, and dots', () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon fs-anchor="premium">
+          <aside fs-overlay><button type="button">공용 버튼</button></aside>
+          <article>Premium 1</article>
+          <article>Premium 2</article>
+          <article>Premium 3</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root, { dots: true });
+    const horizon = instance.horizons.get(0);
+    const overlay = root.querySelector('[fs-overlay]');
+
+    expect(instance.state.total).toBe(3);
+    expect(horizon.slides).toHaveLength(3);
+    expect(horizon.overlays).toEqual([overlay]);
+    expect(overlay.parentElement).toBe(horizon.page);
+    expect(overlay.closest('.fs-horizon-wrapper')).toBeNull();
+    expect(root.querySelectorAll('.fs-nav-horizon .fs-dot')).toHaveLength(3);
+  });
+
+  it('supports multiple fs-overlay elements without changing slide count', () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <header fs-overlay>Title</header>
+          <article>One</article>
+          <nav fs-overlay><button type="button">Next</button></nav>
+          <article>Two</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root);
+    const horizon = instance.horizons.get(0);
+
+    expect(horizon.overlays).toHaveLength(2);
+    expect(horizon.slides).toHaveLength(2);
+    horizon.overlays.forEach((overlay) => {
+      expect(overlay.parentElement).toBe(horizon.page);
+      expect(overlay.closest('.fs-horizon-wrapper')).toBeNull();
+    });
+  });
+
+  it('keeps the existing warning when overlays leave fewer than two slides', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <aside fs-overlay>Shared</aside>
+          <article>Only slide</article>
+        </section>
+        <section>Next</section>
+      </main>
+    `);
+    const instance = create(root);
+
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('슬라이드가 2개 이상 필요합니다'));
+    expect(instance.horizons.size).toBe(0);
+    expect(instance.state.total).toBe(2);
+    expect(root.querySelector('.fs-horizon-wrapper')).toBeNull();
+  });
+
+  it('moves to real horizontal slide indexes without an overlay offset', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon fs-anchor="premium">
+          <aside fs-overlay>Shared</aside>
+          <article id="premium-one">One</article>
+          <article id="premium-two">Two</article>
+          <article id="premium-three">Three</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root);
+
+    await instance.moveTo('premium', 1);
+
+    expect(instance.state.current.slideIndex).toBe(1);
+    expect(instance.state.current.slide).toBe(root.querySelector('#premium-two'));
+    expect(instance.horizons.get(0).swiper.activeIndex).toBe(1);
+  });
+
   it('applies named effects to full-view root and horizontal groups', () => {
     const root = mount(`
       <main fs fs-effect="fade">
@@ -181,7 +334,9 @@ describe('FullScroll 1.3.0', () => {
     create(root);
 
     expect(FakeSwiper.instances[0].options.effect).toBe('creative');
-    expect(FakeSwiper.instances[0].options.creativeEffect.prev.translate).toEqual([0, 0, -800]);
+    expect(FakeSwiper.instances[0].options.creativeEffect.prev.translate).toEqual([0, 0, -520]);
+    expect(FakeSwiper.instances[0].options.creativeEffect.prev.scale).toBe(0.88);
+    expect(FakeSwiper.instances[0].options.creativeEffect.next.translate).toEqual(['94%', 0, -80]);
     expect(FakeSwiper.instances[1].options.effect).toBe('fade');
     expect(FakeSwiper.instances[1].options.fadeEffect.crossFade).toBe(true);
   });
@@ -265,6 +420,84 @@ describe('FullScroll 1.3.0', () => {
     expect(FakeSwiper.instances[0].options.slidesPerView).toBe('auto');
     expect(FakeSwiper.instances[1].options.slidesPerView).toBe('auto');
     expect(FakeSwiper.instances[0].options.slidesPerGroup).toBe(1);
+  });
+
+  it('keeps fs-flow="footer" in a dedicated stage without disabling the root effect', async () => {
+    const root = mount(`
+      <main fs fs-effect="depth">
+        <section fs-anchor="intro">Intro</section>
+        <section fs-anchor="design">Design</section>
+        <footer fs-page fs-flow="footer" fs-anchor="footer">Footer</footer>
+      </main>
+    `);
+    const instance = create(root);
+    const footerRoute = instance.routes[2];
+    const footerStage = root.querySelector(':scope > .fs-footer-stage');
+    const footer = footerRoute.page;
+
+    footer.getBoundingClientRect = () => ({ height: 397 });
+
+    expect(footerRoute.flow).toBe(true);
+    expect(footerRoute.flowFooter).toBe(true);
+    expect(instance.rootSwiper.options.slidesPerView).toBe(1);
+    expect(instance.rootSwiper.options.effect).toBe('creative');
+    expect(instance.rootSwiper.options.creativeEffect.prev.translate).toEqual([0, 0, -520]);
+    expect(instance.rootSwiper.options.creativeEffect.next.translate).toEqual([0, '94%', -80]);
+    expect(root.getAttribute('fs-effect-active')).toBe('depth');
+    expect(footerStage).not.toBeNull();
+    expect(footer.parentElement).toBe(footerStage);
+    expect(footer.classList.contains('swiper-slide')).toBe(false);
+
+    await instance.moveTo('footer');
+    expect(footerStage.style.transform).toBe('translate3d(0, -397px, 0)');
+    expect(instance.rootSwiper.activeIndex).toBe(1);
+
+    await instance.prev();
+    expect(footerStage.style.transform).toBe('translate3d(0, 0px, 0)');
+    expect(instance.rootSwiper.activeIndex).toBe(1);
+    expect(instance.state.current.anchor).toBe('design');
+
+    instance.destroy();
+    expect([...root.children].map((element) => element.getAttribute('fs-anchor'))).toEqual([
+      'intro',
+      'design',
+      'footer',
+    ]);
+  });
+
+  it('rejects fs-flow="footer" outside the final vertical page', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const root = mount(`
+      <main fs>
+        <section fs-flow="footer">Invalid</section>
+        <section>Last</section>
+      </main>
+    `);
+    const instance = create(root);
+
+    expect(instance.routes[0].flow).toBe(false);
+    expect(instance.routes[0].flowFooter).toBe(false);
+    expect(instance.rootSwiper.options.slidesPerView).toBe(1);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('마지막 세로 페이지'));
+  });
+
+  it('does not activate footer flow sizing inside a horizontal group', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <article fs-flow="footer">Invalid footer flow</article>
+          <article>Regular slide</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root);
+    const horizon = instance.horizons.get(0);
+
+    expect(instance.routes[0].flow).toBe(false);
+    expect(horizon.swiper.options.slidesPerView).toBe(1);
+    expect(horizon.slides[0].hasAttribute('fs-flow-active')).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('마지막 세로 페이지'));
   });
 
   it('uses direction-specific companion offsets for adjacent flow slides', async () => {
@@ -369,6 +602,39 @@ describe('FullScroll 1.3.0', () => {
     await instance.next();
 
     expect(horizon.swiper.lastTranslate).toBe(-100);
+  });
+
+  it('recomputes the active Flow offset after the viewport changes', async () => {
+    vi.useFakeTimers();
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <article>One</article>
+          <article fs-flow="prev">Two</article>
+          <article>Three</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root);
+    const horizon = instance.horizons.get(0);
+    let viewportWidth = 1000;
+    Object.defineProperty(horizon.page, 'clientWidth', {
+      configurable: true,
+      get: () => viewportWidth,
+    });
+    Object.defineProperties(horizon.slides[1], {
+      offsetLeft: { configurable: true, value: 1000 },
+      offsetWidth: { configurable: true, value: 200 },
+    });
+
+    await instance.next();
+    expect(horizon.swiper.lastTranslate).toBe(-200);
+
+    viewportWidth = 800;
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(121);
+
+    expect(horizon.swiper.lastTranslate).toBe(-400);
   });
 
   it('creates and destroys the runtime with the real Swiper package', () => {
@@ -520,6 +786,7 @@ describe('FullScroll 1.3.0', () => {
       <main fs>
         <section fs-anchor="before">Before</section>
         <section fs-horizon fs-horizon-only fs-anchor="only">
+          <aside fs-overlay>Shared controls</aside>
           <article>Only 1</article><article>Only 2</article><article>Only 3</article>
         </section>
         <section fs-anchor="after">After</section>
@@ -531,6 +798,7 @@ describe('FullScroll 1.3.0', () => {
     expect(instance.state.current.anchor).toBe('only');
     expect(instance.state.current.slideIndex).toBe(0);
     expect(instance.state.current.horizonOnly).toBe(true);
+    expect(instance.horizons.get(1).slides).toHaveLength(3);
 
     await instance.nextWithinHorizon('test');
     expect(instance.state.current.slideIndex).toBe(1);
@@ -583,6 +851,85 @@ describe('FullScroll 1.3.0', () => {
     expect(instance.state.currentIndex).toBe(0);
   });
 
+  it('emits transition lifecycle events around an accepted route change', async () => {
+    const root = mount();
+    const instance = create(root);
+    const events = [];
+
+    ['fullscroll:transitionstart', 'fullscroll:change'].forEach((name) => {
+      root.addEventListener(name, () => events.push(name));
+    });
+
+    expect(await instance.next()).toBe(true);
+    expect(events).toEqual(['fullscroll:transitionstart', 'fullscroll:change']);
+  });
+
+  it('emits transitioncancel when the runtime is destroyed during movement', async () => {
+    const root = mount();
+    const instance = create(root);
+    const events = [];
+    root.addEventListener('fullscroll:transitioncancel', () => events.push('cancel'));
+    root.addEventListener('fullscroll:transitionstart', () => instance.destroy(), { once: true });
+
+    expect(await instance.next()).toBe(false);
+    expect(events).toEqual(['cancel']);
+  });
+
+  it('restores the origin runtime state when Swiper movement throws', async () => {
+    const root = mount();
+    const events = [];
+
+    class MovementFailingSwiper extends FakeSwiper {
+      slideTo(index, duration = 0, runCallbacks = true) {
+        if (this.isHorizontal() && duration > 0) {
+          this.activeIndex = index;
+          throw new Error('movement failed');
+        }
+        super.slideTo(index, duration, runCallbacks);
+      }
+    }
+
+    const instance = new FullScroll(root, {
+      Swiper: MovementFailingSwiper,
+      speed: 20,
+      history: false,
+    });
+    activeInstances.add(instance);
+    root.addEventListener('fullscroll:transitioncancel', () => events.push('cancel'));
+
+    await expect(instance.next()).rejects.toThrow('movement failed');
+
+    expect(instance.state.currentIndex).toBe(0);
+    expect(instance.horizons.get(0).swiper.activeIndex).toBe(0);
+    expect(root.hasAttribute('fs-moving')).toBe(false);
+    expect(events).toEqual(['cancel']);
+  });
+
+  it('reports the current route through refresh and responsive events', () => {
+    vi.useFakeTimers();
+    const root = mount();
+    const instance = create(root, { breakpoint: 720 });
+    const responsive = [];
+    const refreshed = [];
+    root.addEventListener('fullscroll:responsive', (event) => responsive.push(event.detail));
+    root.addEventListener('fullscroll:refresh', (event) => refreshed.push(event.detail));
+
+    instance.refresh();
+    expect(refreshed.at(-1).current.pageIndex).toBe(0);
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 });
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(121);
+    expect(responsive.at(-1).responsive).toBe(true);
+    expect(responsive.at(-1).current.pageIndex).toBe(0);
+
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1280 });
+    window.dispatchEvent(new Event('resize'));
+    vi.advanceTimersByTime(121);
+    expect(responsive.at(-1).responsive).toBe(false);
+    expect(responsive.at(-1).current.pageIndex).toBe(0);
+  });
+
   it('keeps duplicate anchors out of history after warning', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const root = mount(`
@@ -612,9 +959,37 @@ describe('FullScroll 1.3.0', () => {
     await instance.moveTo('intro', 1);
     expect(window.location.hash).toBe('#intro/2');
     window.history.replaceState({}, '', '/');
-    instance.onLocationChange();
+    instance.location.onChange();
     await Promise.resolve();
     expect(instance.state.currentIndex).toBe(0);
+  });
+
+  it('round-trips encoded slash characters in anchors', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-anchor="intro">Intro</section>
+        <section fs-horizon fs-anchor="case/study">
+          <article>Case 1</article>
+          <article>Case 2</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root, { history: true });
+
+    await instance.moveTo('case/study', 1);
+
+    expect(window.location.hash).toBe('#case%2Fstudy/2');
+    expect(instance.location.read()).toBe(2);
+  });
+
+  it('rejects malformed slide suffixes instead of silently selecting the first slide', () => {
+    const root = mount();
+    const instance = create(root, { history: true });
+
+    expect(instance.location.resolve('#intro/0')).toBeNull();
+    expect(instance.location.resolve('#intro/two')).toBeNull();
+    expect(instance.location.resolve('#intro/2/more')).toBeNull();
+    expect(instance.location.resolve('#intro/999')).toBe(2);
   });
 
   it('lets an fs-scroll region consume wheel input until its boundary', async () => {
@@ -685,6 +1060,27 @@ describe('FullScroll 1.3.0', () => {
     vi.advanceTimersByTime(121);
     expect(instance.state.active).toBe(true);
     expect(root.querySelector(':scope > .fs-vertical-wrapper')).not.toBeNull();
+  });
+
+  it('leaves fs-overlay in normal document flow in responsive mode', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 });
+    const root = mount(`
+      <main fs>
+        <section fs-horizon>
+          <aside fs-overlay style="color: tomato">Shared</aside>
+          <article>One</article>
+          <article>Two</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root, { breakpoint: 720 });
+    const overlay = root.querySelector('[fs-overlay]');
+
+    expect(instance.state.responsive).toBe(true);
+    expect(root.hasAttribute('fs-ready')).toBe(false);
+    expect(root.querySelector('.fs-horizon-wrapper')).toBeNull();
+    expect(overlay.parentElement).toBe(instance.pages[0]);
+    expect(overlay.style.position).toBe('');
   });
 
   it('supports keyboard movement without capturing form input', async () => {
@@ -778,6 +1174,22 @@ describe('FullScroll 1.3.0', () => {
     expect(progress.getAttribute('role')).toBe('progressbar');
   });
 
+  it('prefers an exact slash-containing anchor in fs-move references', async () => {
+    document.body.innerHTML = `
+      <button fs-move="case%2Fstudy">Case study</button>
+      <main fs>
+        <section fs-anchor="intro">Intro</section>
+        <section fs-anchor="case/study">Case study</section>
+      </main>
+    `;
+    const instance = create(document.querySelector('[fs]'));
+
+    document.querySelector('[fs-move]').click();
+    await Promise.resolve();
+
+    expect(instance.state.currentIndex).toBe(1);
+  });
+
   it('restores declarative control attributes and child nodes on destroy', () => {
     document.body.innerHTML = `
       <div id="controls">
@@ -816,6 +1228,23 @@ describe('FullScroll 1.3.0', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
+  it('skips route-local steps when next and prev run in responsive mode', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 640 });
+    const root = mount(`
+      <main fs>
+        <section fs-step="3">Steps</section>
+        <section>Next route</section>
+      </main>
+    `);
+    const instance = create(root, { breakpoint: 720 });
+
+    expect(instance.state.responsive).toBe(true);
+    expect(await instance.next()).toBe(true);
+    expect(instance.state.currentIndex).toBe(1);
+    expect(await instance.prev()).toBe(true);
+    expect(instance.state.currentIndex).toBe(0);
+  });
+
   it('discovers newly added declarative controls on refresh', () => {
     const root = mount();
     const instance = create(root);
@@ -842,6 +1271,37 @@ describe('FullScroll 1.3.0', () => {
 
     expect(slides[0].hasAttribute('inert')).toBe(true);
     expect(slides[1].hasAttribute('inert')).toBe(false);
+  });
+
+  it('keeps active overlay controls available and relies on page inert when inactive', async () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon fs-anchor="premium">
+          <aside fs-overlay><button type="button" id="overlay-action">Action</button></aside>
+          <article>One</article>
+          <article>Two</article>
+        </section>
+        <section fs-anchor="after">After</section>
+      </main>
+    `);
+    const button = root.querySelector('#overlay-action');
+    const clicked = vi.fn();
+    button.addEventListener('click', clicked);
+    const instance = create(root);
+    const overlay = root.querySelector('[fs-overlay]');
+
+    button.focus();
+    button.click();
+    expect(document.activeElement).toBe(button);
+    expect(clicked).toHaveBeenCalledOnce();
+    expect(overlay.hasAttribute('inert')).toBe(false);
+    expect(instance.pages[0].hasAttribute('inert')).toBe(false);
+
+    await instance.moveTo('after');
+
+    expect(overlay.hasAttribute('inert')).toBe(false);
+    expect(instance.pages[0].hasAttribute('inert')).toBe(true);
+    expect(button.closest('[inert]')).toBe(instance.pages[0]);
   });
 
   it('disables and rebuilds the runtime without losing the route', async () => {
@@ -954,6 +1414,51 @@ describe('FullScroll 1.3.0', () => {
     expect(instance.state.total).toBe(6);
     expect(instance.pages.at(-1)).toBe(added);
     expect(root.querySelector('.fs-vertical-wrapper')?.lastElementChild).toBe(added);
+  });
+
+  it('refreshes real slides without reclassifying overlays and restores author order', () => {
+    const root = mount(`
+      <main fs>
+        <section fs-horizon fs-anchor="premium">
+          <aside id="overlay-top" fs-overlay class="author-overlay">Top</aside>
+          <article id="slide-one">One</article>
+          <nav id="overlay-middle" fs-overlay aria-label="Shared navigation">Middle</nav>
+          <article id="slide-two">Two</article>
+        </section>
+      </main>
+    `);
+    const instance = create(root, { dots: true });
+    const page = instance.pages[0];
+    const overlay = root.querySelector('#overlay-top');
+    const added = document.createElement('article');
+    added.id = 'slide-three';
+    added.textContent = 'Three';
+    overlay.textContent = 'Changed shared content';
+    page.append(added);
+
+    instance.refresh();
+
+    const horizon = instance.horizons.get(0);
+    expect(instance.state.total).toBe(3);
+    expect(horizon.slides).toHaveLength(3);
+    expect(horizon.overlays).toHaveLength(2);
+    expect(horizon.wrapper.querySelectorAll(':scope > article')).toHaveLength(3);
+    expect(horizon.overlays.every((item) => item.parentElement === page)).toBe(true);
+    expect(overlay.textContent).toBe('Changed shared content');
+    expect(root.querySelectorAll('.fs-nav-horizon .fs-dot')).toHaveLength(3);
+
+    instance.destroy();
+
+    expect(Array.from(page.children, (child) => child.id)).toEqual([
+      'overlay-top',
+      'slide-one',
+      'overlay-middle',
+      'slide-two',
+      'slide-three',
+    ]);
+    expect(overlay.hasAttribute('fs-overlay')).toBe(true);
+    expect(overlay.className).toBe('author-overlay');
+    expect(root.querySelector('.fs-horizon-wrapper')).toBeNull();
   });
 
   it('turns one touch swipe into one flattened route step', async () => {
@@ -1086,9 +1591,9 @@ describe('FullScroll 1.3.0', () => {
     const instance = create(root, { history: true, speed: 20 });
 
     window.history.replaceState({}, '', '#details');
-    instance.onLocationChange();
+    instance.location.onChange();
     window.history.replaceState({}, '', '#outro');
-    instance.onLocationChange();
+    instance.location.onChange();
 
     await vi.waitFor(() => {
       expect(instance.state.current.anchor).toBe('outro');

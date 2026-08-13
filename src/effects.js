@@ -33,8 +33,9 @@ function directionalEffect(effect, direction) {
       effect: 'creative',
       creativeEffect: {
         perspective: true,
-        prev: { translate: [0, 0, -800], scale: 0.78, opacity: 0 },
-        next: { translate: translate(direction, '100%'), opacity: 0 },
+        limitProgress: 1,
+        prev: { translate: [0, 0, -520], scale: 0.88, opacity: 0.14 },
+        next: { translate: translate(direction, '94%', -80), scale: 0.98, opacity: 0 },
       },
     };
   }

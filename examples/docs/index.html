@@ -46,11 +46,13 @@
       .visual::before, .visual::after { position: absolute; content: ''; border-radius: 999px; opacity: .76; }
       .visual-basic { background: linear-gradient(135deg, #4f46e5, #8b5cf6); } .visual-basic::before { width: 130px; height: 130px; background: #fff; transform: translate(-65px, 28px); } .visual-basic::after { width: 180px; height: 180px; border: 28px solid rgb(255 255 255 / 45%); transform: translate(94px, -48px); }
       .visual-flow { background: #dba924; color: #1d2939; } .visual-flow::before { width: 210px; height: 108px; border-radius: 14px; background: #fff4c7; transform: translate(-50px, 0); } .visual-flow::after { width: 54px; height: 108px; border-radius: 14px; background: #fff; transform: translate(86px, 0); }
+      .visual-overlay { background: linear-gradient(135deg, #1c1917, #7c2d12); } .visual-overlay::before { width: 72%; height: 48px; border-radius: 12px; background: #fef3c7; transform: translateY(-48px); } .visual-overlay::after { width: 74%; height: 98px; border-radius: 12px; border: 2px solid rgb(255 255 255 / 65%); transform: translateY(34px); }
       .visual-effect { background: linear-gradient(125deg, #172554, #0f766e); } .visual-effect::before { width: 115px; height: 132px; border-radius: 12px; background: #06b6d4; transform: rotate(-12deg) translate(-45px, 7px); } .visual-effect::after { width: 115px; height: 132px; border-radius: 12px; background: #818cf8; transform: rotate(12deg) translate(45px, -7px); }
       .visual-options { background: #334155; } .visual-options::before { width: 65%; height: 58px; border-radius: 10px; background: #fda4af; transform: translateY(-35px); } .visual-options::after { width: 65%; height: 58px; border-radius: 10px; background: #fbbf24; transform: translateY(35px); }
       .visual-theme { background: linear-gradient(90deg, #111827 0 50%, #f8fafc 50%); color: #111827; } .visual-theme::before { width: 190px; height: 42px; border-radius: 999px; background: #fff; box-shadow: 0 2px 12px rgb(0 0 0 / 18%); }
       .visual-step { background: #4338ca; } .visual-step::before { width: 42px; height: 42px; background: #c7d2fe; transform: translate(-62px, 0); } .visual-step::after { width: 42px; height: 42px; background: #fff; box-shadow: 62px 0 0 #818cf8; }
       .visual-video { background: #0f766e; } .visual-video::before { width: 116px; height: 82px; border-radius: 14px; background: #99f6e4; } .visual-video::after { border-top: 14px solid transparent; border-bottom: 14px solid transparent; border-left: 21px solid #0f766e; transform: translate(4px, 0); }
+      .visual-gsap { background: linear-gradient(135deg, #111827, #7c3aed); } .visual-gsap::before { width: 150px; height: 56px; border-radius: 14px; background: #c4b5fd; transform: translateY(-30px) rotate(-8deg); } .visual-gsap::after { width: 100px; height: 100px; border: 12px solid #f0abfc; background: transparent; transform: translate(68px, 38px) rotate(18deg); }
       .visual-controls { background: #1d4ed8; } .visual-controls::before { width: 48px; height: 48px; background: #fff; box-shadow: 100px 0 0 #fff; transform: translateX(-50px); } .visual-controls::after { width: 86px; height: 8px; background: #bfdbfe; transform: translateY(58px); }
       .visual-scroll { background: #0f172a; } .visual-scroll::before { width: 120px; height: 130px; border: 1px solid #64748b; border-radius: 12px; background: repeating-linear-gradient(#1e293b 0 16px, #334155 16px 20px); } .visual-scroll::after { width: 4px; height: 62px; background: #94a3b8; transform: translate(48px, 0); }
       .visual .label { position: relative; z-index: 1; padding: 7px 11px; border-radius: 999px; background: rgb(15 23 42 / 30%); color: inherit; font-size: 14px; }
@@ -117,7 +119,7 @@
 
       <section class="catalog" id="catalog">
         <div class="category">
-          <div class="category-head"><div><p class="eyebrow">Layout</p><h2>페이지 구조</h2><p>세로 흐름을 기준으로, 필요한 구간만 가로 그룹이나 자연 크기 화면으로 바꿉니다.</p></div><span class="count">2 patterns</span></div>
+          <div class="category-head"><div><p class="eyebrow">Layout</p><h2>페이지 구조</h2><p>세로 흐름을 기준으로, 필요한 구간만 가로 그룹이나 자연 크기 화면으로 바꿉니다.</p></div><span class="count">3 patterns</span></div>
           <div class="grid">
             <article class="demo-card"><div class="visual visual-basic"><span class="label">Vertical + Horizontal</span></div><div class="card-body"><h3>기본 세로·가로</h3><p>가로 → 세로 → 가로를 하나의 이동 흐름으로 연결합니다.</p><div class="tags"><code>fs</code><code>fs-horizon</code><code>fs-anchor</code></div><div class="card-actions"><a class="preview-link" href="../basic-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-horizon&gt;
   &lt;article&gt;1&lt;/article&gt;
@@ -127,6 +129,11 @@
   &lt;article&gt;1&lt;/article&gt;
   &lt;article fs-flow="prev,next"&gt;2&lt;/article&gt;
   &lt;article&gt;3&lt;/article&gt;
+  &lt;/section&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-overlay"><span class="label">Shared Overlay</span></div><div class="card-body"><h3>가로 공용 레이어</h3><p>제목·링크·화살표는 고정하고 route에는 실제 슬라이드만 포함합니다.</p><div class="tags"><code>fs-overlay</code><code>moveTo()</code></div><div class="card-actions"><a class="preview-link" href="../overlay-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-horizon&gt;
+  &lt;aside fs-overlay&gt;공용 UI&lt;/aside&gt;
+  &lt;article&gt;1&lt;/article&gt;
+  &lt;article&gt;2&lt;/article&gt;
 &lt;/section&gt;</code></pre></details></div></article>
           </div>
         </div>
@@ -143,7 +150,7 @@
         </div>
 
         <div class="category">
-          <div class="category-head"><div><p class="eyebrow">Scene</p><h2>사이트 연출</h2><p>헤더 색상, 한 화면 안의 단계 연출, 영상 재생을 섹션 상태에 연결합니다.</p></div><span class="count">3 patterns</span></div>
+          <div class="category-head"><div><p class="eyebrow">Scene</p><h2>사이트 연출</h2><p>헤더 색상, 한 화면 안의 단계 연출, 영상 재생과 GSAP 콘텐츠 애니메이션을 섹션 상태에 연결합니다.</p></div><span class="count">4 patterns</span></div>
           <div class="grid">
             <article class="demo-card"><div class="visual visual-theme"><span class="label">Header Theme</span></div><div class="card-body"><h3>헤더 테마</h3><p>현재 섹션의 테마 값을 고정 헤더나 퀵 메뉴에 자동 복사합니다.</p><div class="tags"><code>fs-theme</code><code>themeTarget</code></div><div class="card-actions"><a class="preview-link" href="../theme-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-theme="dark"&gt;...&lt;/section&gt;
 
@@ -156,6 +163,11 @@ new FullScroll('[fs]', {
             <article class="demo-card"><div class="visual visual-video"><span class="label">Active Media</span></div><div class="card-body"><h3>영상 라이프사이클</h3><p>활성 경로에서만 video·Vimeo·YouTube 재생을 요청하고 이탈 시 멈춥니다.</p><div class="tags"><code>fs-video</code><code>muted</code><code>playsinline</code></div><div class="card-actions"><a class="preview-link" href="../video-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>&lt;section fs-video&gt;
   &lt;video muted playsinline src="movie.mp4"&gt;&lt;/video&gt;
 &lt;/section&gt;</code></pre></details></div></article>
+            <article class="demo-card"><div class="visual visual-gsap"><span class="label">GSAP Scenes</span></div><div class="card-body"><h3>GSAP 콘텐츠 연출</h3><p>Swiper 이동은 유지하고, 내부 요소의 진입·이탈·단계 연출만 GSAP으로 연결합니다.</p><div class="tags"><code>data-gsap</code><code>reentry</code><code>context</code></div><div class="card-actions"><a class="preview-link" href="../gsap-demo/" target="_blank" rel="noopener">Preview ↗</a></div><details><summary>최소 선언 보기</summary><pre><code>import { createGsapScenes } from '@fullscroll/core/gsap';
+createGsapScenes(fullscroll, {
+  gsap,
+  animations: [{ selector: '[data-gsap]', reentry: 'always' }]
+});</code></pre></details></div></article>
           </div>
         </div>
 

@@ -7,10 +7,14 @@
 - [x] `[fs]` 루트 초기화 및 같은 루트의 중복 초기화 방지
 - [x] 루트 직계 `section`과 비 `section`의 `[fs-page]` 예외 인식
 - [x] `[fs-horizon]` 직계 요소를 가로 슬라이드로 자동 인식
+- [x] 직계 `[fs-overlay]`를 route·history·가로 점에서 제외되는 공용 레이어로 유지
+- [x] 복수 overlay와 refresh·destroy 원래 작성 순서 복원
 - [x] 가로 → 세로 → 가로를 하나의 평면 경로로 계산
 - [x] 2단계 이상 가로 중첩 거부
 - [x] 중복 `[fs-anchor]` 경고 및 잘못된 히스토리 기록 방지
+- [x] 인코딩된 `/` 포함 앵커 왕복과 잘못된 슬라이드 접미사 거부
 - [x] `[fs-flow]` 세로 자연 높이 예외
+- [x] `[fs-flow="footer"]` 전용 stage를 통한 자연 높이 하단 정렬, 직전 화면 복원, 일반 세로 effect 유지
 - [x] 가로 직계 `[fs-flow]` 슬라이드만 자연 너비 처리
 - [x] `[fs-flow="prev,next"]` 경로별 고정 동반 슬라이드 뷰
 - [x] 동반 뷰 슬라이드의 포커스 접근성 유지
@@ -32,6 +36,7 @@
 
 - [x] `[fs-prev]`, `[fs-next]` 자동 연결과 처음·끝 비활성화
 - [x] `[fs-move]`의 `href` 또는 속성값으로 앵커 이동
+- [x] `/`가 포함된 정확한 `[fs-move]` 앵커 우선 해석
 - [x] `[fs-current]`, `[fs-total]` 평면 경로 번호 동기화
 - [x] `[fs-progress]`의 `<progress>` 값 및 `--fs-progress` 동기화
 - [x] 현재 `[fs-move]`에 `aria-current="page"` 표시
@@ -57,8 +62,8 @@
 - [x] 선택형 세로·가로 점 내비게이션과 `aria-current`
 - [x] 앵커 해시 읽기·기록·뒤로 가기
 - [x] `next()`, `prev()`, `moveTo()`, `enable()`, `disable()`, `refresh()`, `destroy()`
-- [x] `state`, `FullScroll.get()`, `FullScroll.version`
-- [x] `ready`, `beforechange`, `change`, `responsive`, `resize`, `destroy` 이벤트
+- [x] 현재 route와 전체 공개 `routes`를 포함하는 `state`, `FullScroll.get()`, `FullScroll.version`
+- [x] `ready`, `beforechange`, `transitionstart`, `transitioncancel`, `change`, `responsive`, `resize`, `refresh`, `destroy` 이벤트
 
 ## 화면 연출과 활성 상태
 
@@ -68,6 +73,11 @@
 - [x] `[fs-theme]`와 `themeTarget`의 테마 자동 동기화 및 원래 테마 복원
 - [x] `[fs-step]`의 같은 경로 내 단계 진행과 `fs-step-current` 상태
 - [x] `[fs-video]`의 활성 경로 재생·이탈 일시정지
+- [x] 선택적 `@fullscroll/core/gsap` 콘텐츠 연출 어댑터
+- [x] 애니메이션 배열별 선택자·초기화 방식·생명주기 시작 시점 설정
+- [x] CSS 또는 GSAP이 소유하는 초기 표시 상태와 `playCurrent()` 수동 첫 진입
+- [x] 애니메이션 그룹별 `always`, `once`, `preserve` 재진입 정책
+- [x] GSAP context 정리와 `prefers-reduced-motion` duration 보정
 
 ## 반응형, 복원과 배포
 
@@ -79,6 +89,7 @@
 - [x] 실제 Swiper 패키지 통합 테스트
 - [x] TypeScript 소비 코드 컴파일 검사
 - [x] 배포 파일 존재·버전·크기 제한 자동 검사
+- [x] 새 모듈을 자동 포함하는 전체 JavaScript 구문 검사
 - [x] 반응형 데스크톱 데모와 완전 독립형 모바일 데모
 
 ## 1.3.0에서 제공하지 않음

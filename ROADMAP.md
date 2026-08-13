@@ -42,6 +42,7 @@
 - `slide`, `fade`, `creative`, `depth`, `layers`, `zoom` 전환 효과
 - `[fs-theme]`, `[fs-step]`, `[fs-video]` 활성 경로 상태 연동
 - 자연 크기 슬라이드가 함께 보일 때의 접근성 상태 동기화
+- 선택적 `@fullscroll/core/gsap` 콘텐츠 연출과 세 재진입 정책
 
 ## 1.3.x — 현장 안정화
 

@@ -1,16 +1,36 @@
+const VIMEO_HOSTS = new Set(['player.vimeo.com']);
+const YOUTUBE_HOSTS = new Set([
+  'youtube.com',
+  'www.youtube.com',
+  'youtube-nocookie.com',
+  'www.youtube-nocookie.com',
+  'youtu.be',
+]);
+
 function iframeCommand(iframe, command) {
   const source = iframe.getAttribute('src') || '';
   if (!source) return;
 
-  if (source.includes('player.vimeo.com')) {
-    iframe.contentWindow?.postMessage({ method: command }, '*');
+  let url;
+  try {
+    url = new URL(source, document.baseURI);
+  } catch {
     return;
   }
 
-  if (source.includes('youtube.com') || source.includes('youtu.be')) {
+  if (VIMEO_HOSTS.has(url.hostname)) {
+    iframe.contentWindow?.postMessage({ method: command }, url.origin);
+    return;
+  }
+
+  if (YOUTUBE_HOSTS.has(url.hostname)) {
     iframe.contentWindow?.postMessage(
-      JSON.stringify({ event: 'command', func: command === 'play' ? 'playVideo' : 'pauseVideo', args: '' }),
-      '*',
+      JSON.stringify({
+        event: 'command',
+        func: command === 'play' ? 'playVideo' : 'pauseVideo',
+        args: [],
+      }),
+      url.origin,
     );
   }
 }
