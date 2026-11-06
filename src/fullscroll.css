@@ -1,6 +1,9 @@
 :root {
   --fs-dot-size: 10px;
-  --fs-dot-gap: 10px;
+  /* 시각 크기와 별개로 보장하는 터치 타겟 크기입니다. */
+  --fs-dot-target: 24px;
+  /* --fs-dot-size + --fs-dot-gap이 24px 이상이 되도록 유지합니다. */
+  --fs-dot-gap: 14px;
   --fs-dot-color: rgba(255, 255, 255, 0.5);
   --fs-dot-active-color: #fff;
   --fs-dot-outline: #111;
@@ -18,7 +21,8 @@
   height: calc(100dvh - var(--fs-viewport-offset-top) - var(--fs-viewport-offset-bottom));
   margin-block-start: var(--fs-viewport-offset-top);
   overflow: hidden;
-  touch-action: none;
+  /* 한 손가락 이동은 JS가 처리하고, 두 손가락 확대는 브라우저에 맡깁니다. */
+  touch-action: pinch-zoom;
 }
 
 [fs][fs-ready] > .fs-vertical-wrapper,
@@ -155,6 +159,7 @@
 }
 
 .fs-dot {
+  position: relative;
   width: var(--fs-dot-size);
   height: var(--fs-dot-size);
   margin: 0;
@@ -164,6 +169,18 @@
   background: var(--fs-dot-color);
   cursor: pointer;
   appearance: none;
+}
+
+/* 보이는 점은 그대로 두고 클릭·터치 영역만 --fs-dot-target까지 넓힙니다. */
+.fs-dot::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--fs-dot-target);
+  height: var(--fs-dot-target);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
 }
 
 .fs-dot[aria-current='true'] {

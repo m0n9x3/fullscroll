@@ -1112,6 +1112,46 @@ describe('FullScroll 1.3.0', () => {
     expect(secondHorizontalDot.getAttribute('aria-current')).toBe('true');
   });
 
+  it('labels generated navigation in English by default', () => {
+    const root = mount();
+    create(root, { dots: true });
+
+    expect(root.querySelector('.fs-nav-vertical').getAttribute('aria-label')).toBe(
+      'Page navigation',
+    );
+    expect(root.querySelector('.fs-nav-vertical .fs-dot').getAttribute('aria-label')).toMatch(
+      /^Page 1 of \d+$/,
+    );
+    expect(root.querySelector('.fs-nav-horizon').getAttribute('aria-label')).toMatch(
+      /^Horizontal navigation of page \d+$/,
+    );
+    expect(root.querySelector('.fs-nav-horizon .fs-dot').getAttribute('aria-label')).toMatch(
+      /^Slide 1 of \d+$/,
+    );
+  });
+
+  it('accepts localized navigation labels and keeps defaults for the rest', () => {
+    const root = mount();
+    create(root, {
+      dots: true,
+      labels: { navigation: '페이지 이동', page: '{index}/{total} 페이지' },
+    });
+
+    expect(root.querySelector('.fs-nav-vertical').getAttribute('aria-label')).toBe('페이지 이동');
+    expect(root.querySelector('.fs-nav-vertical .fs-dot').getAttribute('aria-label')).toMatch(
+      /^1\/\d+ 페이지$/,
+    );
+    expect(root.querySelector('.fs-nav-horizon').getAttribute('aria-label')).toMatch(
+      /^Horizontal navigation of page \d+$/,
+    );
+  });
+
+  it('rejects empty navigation labels', () => {
+    const root = mount();
+
+    expect(() => create(root, { labels: { page: ' ' } })).toThrow(TypeError);
+  });
+
   it('connects declarative controls and flattened progress without JavaScript wiring', async () => {
     document.body.innerHTML = `
       <nav id="controls">

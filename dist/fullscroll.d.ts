@@ -31,6 +31,13 @@ export interface FullScrollState {
   readonly routes: readonly FullScrollRoute[];
 }
 
+export interface FullScrollLabels {
+  navigation?: string;
+  page?: string;
+  horizonNavigation?: string;
+  horizonPage?: string;
+}
+
 export interface FullScrollOptions {
   speed?: number;
   easing?: string;
@@ -43,6 +50,7 @@ export interface FullScrollOptions {
   effect?: 'slide' | 'fade' | 'blur' | 'creative' | 'depth' | 'layers' | 'zoom';
   stepReentry?: 'preserve' | 'first' | 'last';
   themeTarget?: string;
+  labels?: FullScrollLabels;
   Swiper?: typeof Swiper;
   verticalSwiper?: SwiperOptions;
   horizontalSwiper?: SwiperOptions;

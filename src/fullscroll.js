@@ -673,6 +673,7 @@ export default class FullScroll {
       pages: this.pages,
       routes: this.routes,
       horizons: this.horizons,
+      labels: this.options.labels,
       onNavigate: (routeIndex) => {
         this.goToRoute(routeIndex, { trigger: 'navigation' });
       },

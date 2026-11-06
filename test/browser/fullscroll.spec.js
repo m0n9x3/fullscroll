@@ -87,3 +87,79 @@ test('keeps keyboard movement inside the fs root', async ({ page }) => {
     target: 'page-one',
   });
 });
+
+test('keeps pinch gestures out of page movement', async ({ page }) => {
+  await openFixture(page);
+
+  expect(
+    await page.locator('[fs]').evaluate((element) => getComputedStyle(element).touchAction),
+  ).toBe('pinch-zoom');
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [
+      { x: 400, y: 300, id: 1 },
+      { x: 700, y: 300, id: 2 },
+    ],
+  });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [
+      { x: 400, y: 380, id: 1 },
+      { x: 700, y: 220, id: 2 },
+    ],
+  });
+  // 핑치 중 첫 손가락만 먼저 떨어져도 페이지가 넘어가면 안 된다.
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [{ x: 700, y: 220, id: 2 }],
+  });
+  await page.waitForTimeout(300);
+  await expect(page.locator('[fs]')).toHaveAttribute('fs-view', 'one');
+
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(300);
+  await expect(page.locator('[fs]')).toHaveAttribute('fs-view', 'one');
+});
+
+test('still moves on a single-finger swipe', async ({ page }) => {
+  await openFixture(page);
+
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: 512, y: 480, id: 1 }],
+  });
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: 512, y: 360, id: 1 }],
+  });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+
+  await expect(page.locator('[fs]')).toHaveAttribute('fs-view', 'two');
+});
+
+test('exposes a 24px dot tap target around the 10px dot', async ({ page }) => {
+  await openFixture(page);
+
+  const dot = page.locator('.fs-nav-vertical .fs-dot').first();
+  const metrics = await dot.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    return {
+      width: rect.width,
+      height: rect.height,
+      near: document.elementFromPoint(centerX, rect.top - 5) === element,
+      far: document.elementFromPoint(centerX, rect.top - 15) === element,
+    };
+  });
+
+  // 보이는 점은 10px 그대로다.
+  expect(metrics.width).toBeLessThanOrEqual(14);
+  expect(metrics.height).toBeLessThanOrEqual(14);
+  // 24px 타겟이라 점 바로 위 5px 지점도 버튼에 포함된다.
+  expect(metrics.near).toBe(true);
+  // 타겟 범위를 벗어난 지점은 버튼이 아니다.
+  expect(metrics.far).toBe(false);
+});

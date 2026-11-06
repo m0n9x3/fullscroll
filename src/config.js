@@ -6,6 +6,13 @@ export const INTERACTIVE_SELECTOR =
 export const WHEEL_INTERACTIVE_SELECTOR =
   'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
 
+export const DEFAULT_LABELS = Object.freeze({
+  navigation: 'Page navigation',
+  page: 'Page {index} of {total}',
+  horizonNavigation: 'Horizontal navigation of page {index}',
+  horizonPage: 'Slide {index} of {total}',
+});
+
 const DEFAULTS = Object.freeze({
   speed: 1200,
   easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
@@ -19,11 +26,22 @@ const DEFAULTS = Object.freeze({
   stepReentry: 'preserve',
   themeTarget: null,
   Swiper: null,
+  labels: DEFAULT_LABELS,
   verticalSwiper: {},
   horizontalSwiper: {},
 });
 
 const STEP_REENTRIES = new Set(['preserve', 'first', 'last']);
+
+/**
+ * 라벨 템플릿의 `{key}` 자리표시자를 값으로 바꿉니다. 모르는 키는 그대로 둡니다.
+ * 화면 낭독기가 읽는 문구이므로 사이트 언어에 맞게 덮어쓸 수 있어야 합니다.
+ */
+export function formatLabel(template, values = {}) {
+  return template.replace(/\{(\w+)\}/g, (match, key) =>
+    Object.hasOwn(values, key) ? String(values[key]) : match,
+  );
+}
 
 function requireObject(value, name) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -47,6 +65,9 @@ export function createOptions(options = {}) {
   if (options.horizontalSwiper !== undefined) {
     requireObject(options.horizontalSwiper, 'horizontalSwiper');
   }
+  if (options.labels !== undefined) {
+    requireObject(options.labels, 'labels');
+  }
 
   const resolved = {
     ...DEFAULTS,
@@ -58,6 +79,10 @@ export function createOptions(options = {}) {
     horizontalSwiper: {
       ...DEFAULTS.horizontalSwiper,
       ...(options.horizontalSwiper ?? {}),
+    },
+    labels: {
+      ...DEFAULT_LABELS,
+      ...(options.labels ?? {}),
     },
   };
 
@@ -75,6 +100,11 @@ export function createOptions(options = {}) {
   }
   if (!STEP_REENTRIES.has(resolved.stepReentry)) {
     throw new TypeError('[FullScroll] stepReentry는 preserve, first, last 중 하나여야 합니다.');
+  }
+  for (const [key, value] of Object.entries(resolved.labels)) {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new TypeError(`[FullScroll] labels.${key}는 비어 있지 않은 문자열이어야 합니다.`);
+    }
   }
 
   return resolved;

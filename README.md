@@ -360,6 +360,7 @@ new FullScroll('[fs]', {
   dots: false,
   history: true,
   effect: 'slide',
+  labels: { page: 'Page {index} of {total}' },
   Swiper,
   verticalSwiper: {},
   horizontalSwiper: {}
@@ -379,6 +380,7 @@ new FullScroll('[fs]', {
 | `effect` | `'slide'` | 루트 및 별도 지정 없는 가로 그룹의 전환 효과 |
 | `stepReentry` | `'preserve'` | 단계 페이지 재진입 시 `preserve`, `first`, `last` 정책 |
 | `themeTarget` | `null` | 현재 `[fs-theme]`를 함께 반영할 외부 요소 선택자 |
+| `labels` | 영어 문구 | 점 내비게이션과 슬라이드의 `aria-label` 템플릿. `{index}`, `{total}` 사용 |
 | `Swiper` | 전역 `Swiper` | 모듈 환경에서 전달할 Swiper 생성자 |
 | `verticalSwiper` | `{}` | 세로 Swiper에 추가할 옵션 |
 | `horizontalSwiper` | `{}` | 모든 가로 Swiper에 추가할 옵션 |
@@ -452,6 +454,24 @@ FullScroll은 현재 페이지에만 `[fs-active]`를 붙입니다. 가로 페�
 `breakpoint` 이하에서는 Swiper를 제거하고 원본 콘텐츠를 세로로 쌓습니다. 현재 위치에 가까운 콘텐츠를 유지하며, 다시 넓어지면 FullScroll을 재구성합니다. `prefers-reduced-motion: reduce` 환경에서는 전환 시간을 0으로 처리합니다.
 
 활성 페이지와 현재 가로 슬라이드를 제외한 경로에는 런타임 동안 `inert`를 적용해 보이지 않는 컨트롤로 탭 포커스가 이동하지 않게 합니다. 작성자가 원래 지정한 `inert`는 유지되고 `destroy()` 후 모든 속성이 복원됩니다. 페이지 내부 콘텐츠의 제목 구조, 링크 이름, 색상 대비와 초점 스타일은 사이트 작성자가 구성해야 합니다.
+
+한 손가락 이동은 FullScroll이 처리하고, 두 손가락 확대는 브라우저에 맡깁니다(`touch-action: pinch-zoom`). 핀치 중에는 페이지가 이동하지 않습니다.
+
+점 내비게이션은 보이는 점 크기(`--fs-dot-size`, 기본 `10px`)와 별도로 `--fs-dot-target`(기본 `24px`)만큼 클릭·터치 영역을 확보합니다. 점 크기를 줄인다면 `--fs-dot-size + --fs-dot-gap`이 `24px` 이상이 되도록 간격을 함께 조정하세요.
+
+점 내비게이션이 화면 낭독기에 읽히는 문구는 `labels` 옵션으로 사이트 언어에 맞게 바꿉니다.
+
+```js
+new FullScroll('[fs]', {
+  dots: true,
+  labels: {
+    navigation: '페이지 이동',
+    page: '{index}/{total} 페이지',
+    horizonNavigation: '{index}번째 페이지의 가로 이동',
+    horizonPage: '{index}/{total} 가로 페이지',
+  },
+});
+```
 
 고정 헤더나 하단 바를 제외하려면 다음 CSS 변수만 지정합니다.
 

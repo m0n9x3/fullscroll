@@ -28,6 +28,7 @@ export function createInputController({
   let wheelUnlockTimer = 0;
   let pointer = null;
   let touch = null;
+  let multiTouch = false;
 
   function scheduleWheelUnlock() {
     clearTimeout(wheelUnlockTimer);
@@ -196,10 +197,16 @@ export function createInputController({
   function onTouchStart(event) {
     if (
       !isActive() ||
-      event.touches.length > 1 ||
       closestWithin(root, event.target, '[fs-ignore]') ||
       (event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR))
     ) {
+      return;
+    }
+
+    if (event.touches.length > 1) {
+      // 두 손가락 이상은 핑치 줌 같은 브라우저 제스처로 넘기고 이동으로 해석하지 않습니다.
+      multiTouch = true;
+      touch = null;
       return;
     }
 
@@ -208,7 +215,16 @@ export function createInputController({
   }
 
   function onTouchEnd(event) {
-    if (!touch || isMoving()) {
+    // 핑치 중에는 손가락이 하나씩 떨어지므로 모두 떨어질 때까지 기다립니다.
+    if (event.touches.length > 0) {
+      touch = null;
+      return;
+    }
+
+    const wasMultiTouch = multiTouch;
+    multiTouch = false;
+
+    if (wasMultiTouch || !touch || isMoving()) {
       touch = null;
       return;
     }
@@ -224,6 +240,7 @@ export function createInputController({
   function clearGestures() {
     pointer = null;
     touch = null;
+    multiTouch = false;
   }
 
   function attach() {

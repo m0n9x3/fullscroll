@@ -1,7 +1,8 @@
 /* src/fullscroll.css */
 :root {
   --fs-dot-size: 10px;
-  --fs-dot-gap: 10px;
+  --fs-dot-target: 24px;
+  --fs-dot-gap: 14px;
   --fs-dot-color: rgba(255, 255, 255, 0.5);
   --fs-dot-active-color: #fff;
   --fs-dot-outline: #111;
@@ -17,7 +18,7 @@
   height: calc(100dvh - var(--fs-viewport-offset-top) - var(--fs-viewport-offset-bottom));
   margin-block-start: var(--fs-viewport-offset-top);
   overflow: hidden;
-  touch-action: none;
+  touch-action: pinch-zoom;
 }
 [fs][fs-ready] > .fs-vertical-wrapper,
 [fs][fs-ready] > .fs-vertical-wrapper > .swiper-slide,
@@ -135,6 +136,7 @@
   transform: translateX(-50%);
 }
 .fs-dot {
+  position: relative;
   width: var(--fs-dot-size);
   height: var(--fs-dot-size);
   margin: 0;
@@ -144,6 +146,16 @@
   background: var(--fs-dot-color);
   cursor: pointer;
   appearance: none;
+}
+.fs-dot::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--fs-dot-target);
+  height: var(--fs-dot-target);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
 }
 .fs-dot[aria-current=true] {
   background: var(--fs-dot-active-color);

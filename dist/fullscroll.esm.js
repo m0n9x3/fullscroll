@@ -6,6 +6,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 var VERSION = "1.3.0";
 var INTERACTIVE_SELECTOR = 'input, textarea, select, option, button, [contenteditable="true"], [contenteditable=""]';
 var WHEEL_INTERACTIVE_SELECTOR = 'input, textarea, select, [contenteditable="true"], [contenteditable=""]';
+var DEFAULT_LABELS = Object.freeze({
+  navigation: "Page navigation",
+  page: "Page {index} of {total}",
+  horizonNavigation: "Horizontal navigation of page {index}",
+  horizonPage: "Slide {index} of {total}"
+});
 var DEFAULTS = Object.freeze({
   speed: 1200,
   easing: "cubic-bezier(0.22, 1, 0.36, 1)",
@@ -19,10 +25,17 @@ var DEFAULTS = Object.freeze({
   stepReentry: "preserve",
   themeTarget: null,
   Swiper: null,
+  labels: DEFAULT_LABELS,
   verticalSwiper: {},
   horizontalSwiper: {}
 });
 var STEP_REENTRIES = /* @__PURE__ */ new Set(["preserve", "first", "last"]);
+function formatLabel(template, values = {}) {
+  return template.replace(
+    /\{(\w+)\}/g,
+    (match, key) => Object.hasOwn(values, key) ? String(values[key]) : match
+  );
+}
 function requireObject(value, name) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`[FullScroll] ${name}\uC740 \uAC1D\uCCB4\uC5EC\uC57C \uD569\uB2C8\uB2E4.`);
@@ -43,6 +56,9 @@ function createOptions(options = {}) {
   if (options.horizontalSwiper !== void 0) {
     requireObject(options.horizontalSwiper, "horizontalSwiper");
   }
+  if (options.labels !== void 0) {
+    requireObject(options.labels, "labels");
+  }
   const resolved = {
     ...DEFAULTS,
     ...options,
@@ -53,6 +69,10 @@ function createOptions(options = {}) {
     horizontalSwiper: {
       ...DEFAULTS.horizontalSwiper,
       ...options.horizontalSwiper ?? {}
+    },
+    labels: {
+      ...DEFAULT_LABELS,
+      ...options.labels ?? {}
     }
   };
   requireNumber(resolved.speed, "speed");
@@ -68,6 +88,11 @@ function createOptions(options = {}) {
   }
   if (!STEP_REENTRIES.has(resolved.stepReentry)) {
     throw new TypeError("[FullScroll] stepReentry\uB294 preserve, first, last \uC911 \uD558\uB098\uC5EC\uC57C \uD569\uB2C8\uB2E4.");
+  }
+  for (const [key, value] of Object.entries(resolved.labels)) {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new TypeError(`[FullScroll] labels.${key}\uB294 \uBE44\uC5B4 \uC788\uC9C0 \uC54A\uC740 \uBB38\uC790\uC5F4\uC774\uC5B4\uC57C \uD569\uB2C8\uB2E4.`);
+    }
   }
   return resolved;
 }
@@ -437,6 +462,7 @@ function createInputController({
   let wheelUnlockTimer = 0;
   let pointer = null;
   let touch = null;
+  let multiTouch = false;
   function scheduleWheelUnlock() {
     clearTimeout(wheelUnlockTimer);
     const elapsed = performance.now() - lastWheelAt;
@@ -557,14 +583,25 @@ function createInputController({
     finishGesture(gesture, event.clientX, event.clientY);
   }
   function onTouchStart(event) {
-    if (!isActive() || event.touches.length > 1 || closestWithin(root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
+    if (!isActive() || closestWithin(root, event.target, "[fs-ignore]") || event.target instanceof Element && event.target.matches(INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    if (event.touches.length > 1) {
+      multiTouch = true;
+      touch = null;
       return;
     }
     const point = event.changedTouches[0];
     if (point) touch = startGesture(event, point, point.identifier);
   }
   function onTouchEnd(event) {
-    if (!touch || isMoving()) {
+    if (event.touches.length > 0) {
+      touch = null;
+      return;
+    }
+    const wasMultiTouch = multiTouch;
+    multiTouch = false;
+    if (wasMultiTouch || !touch || isMoving()) {
       touch = null;
       return;
     }
@@ -577,6 +614,7 @@ function createInputController({
   function clearGestures() {
     pointer = null;
     touch = null;
+    multiTouch = false;
   }
   function attach() {
     if (attached) return;
@@ -932,17 +970,20 @@ function createLocationController({
 }
 
 // src/navigation.js
-function createNavigation({ root, pages, routes, horizons, onNavigate }) {
+function createNavigation({ root, pages, routes, horizons, labels, onNavigate }) {
   const generatedNodes = [];
   const verticalNav = document.createElement("nav");
   verticalNav.className = "fs-nav fs-nav-vertical";
   verticalNav.setAttribute("fs-ignore", "");
-  verticalNav.setAttribute("aria-label", "\uD398\uC774\uC9C0 \uC774\uB3D9");
+  verticalNav.setAttribute("aria-label", formatLabel(labels.navigation));
   pages.forEach((page, pageIndex) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "fs-dot";
-    button.setAttribute("aria-label", `${pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0`);
+    button.setAttribute(
+      "aria-label",
+      formatLabel(labels.page, { index: pageIndex + 1, total: pages.length })
+    );
     button.addEventListener("click", () => {
       const route = routes.find((item) => item.pageIndex === pageIndex);
       onNavigate(route.index);
@@ -955,12 +996,18 @@ function createNavigation({ root, pages, routes, horizons, onNavigate }) {
     const nav = document.createElement("nav");
     nav.className = "fs-nav fs-nav-horizon";
     nav.setAttribute("fs-ignore", "");
-    nav.setAttribute("aria-label", `${horizon.pageIndex + 1}\uBC88\uC9F8 \uD398\uC774\uC9C0\uC758 \uAC00\uB85C \uC774\uB3D9`);
+    nav.setAttribute(
+      "aria-label",
+      formatLabel(labels.horizonNavigation, { index: horizon.pageIndex + 1 })
+    );
     horizon.slides.forEach((slide, slideIndex) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "fs-dot";
-      button.setAttribute("aria-label", `${slideIndex + 1}\uBC88\uC9F8 \uAC00\uB85C \uD398\uC774\uC9C0`);
+      button.setAttribute(
+        "aria-label",
+        formatLabel(labels.horizonPage, { index: slideIndex + 1, total: horizon.slides.length })
+      );
       button.addEventListener("click", () => {
         const route = routes.find(
           (item) => item.pageIndex === horizon.pageIndex && item.slideIndex === slideIndex
@@ -2106,6 +2153,7 @@ var FullScroll = class {
       pages: this.pages,
       routes: this.routes,
       horizons: this.horizons,
+      labels: this.options.labels,
       onNavigate: (routeIndex) => {
         this.goToRoute(routeIndex, { trigger: "navigation" });
       }
