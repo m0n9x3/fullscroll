@@ -27,6 +27,7 @@ export function createResponsiveController({
   isDisabled,
   isResponsive,
   isActive,
+  isMoving,
   onEnter,
   onExit,
   onResize,
@@ -42,6 +43,13 @@ export function createResponsiveController({
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       if (isDestroyed() || isDisabled()) return;
+
+      // A pending settle during a transition would fight the transition and
+      // leave the runtime on a different route than the public state.
+      if (isMoving()) {
+        refresh();
+        return;
+      }
 
       const shouldRespond = matches();
       if (shouldRespond && !isResponsive()) onEnter();

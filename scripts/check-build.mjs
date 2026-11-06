@@ -1,7 +1,8 @@
 import { readFile, stat } from 'node:fs/promises';
 
 const limits = new Map([
-  ['dist/fullscroll.min.js', 42 * 1024],
+  // 46KB: the author-attribute preserving restore added ~2KB (see src/dom.js).
+  ['dist/fullscroll.min.js', 46 * 1024],
   ['dist/fullscroll.min.css', 6 * 1024],
   ['dist/fullscroll.d.ts', 12 * 1024],
   ['examples/mobile/index.html', 400 * 1024],

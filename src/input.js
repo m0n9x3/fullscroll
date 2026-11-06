@@ -95,10 +95,18 @@ export function createInputController({
     Promise.resolve(move(direction, 'wheel')).finally(scheduleWheelUnlock);
   }
 
+  function ownsKeyboardTarget(target) {
+    if (!(target instanceof Element)) return true;
+    if (target === document.body || target === document.documentElement) return true;
+    return target === root || root.contains(target);
+  }
+
   function onKeyDown(event) {
     if (!isActive() || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) {
       return;
     }
+
+    if (!ownsKeyboardTarget(event.target)) return;
 
     if (
       event.target instanceof Element &&

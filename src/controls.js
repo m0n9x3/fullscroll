@@ -157,6 +157,13 @@ export function createControls({ isActive, resolveRoute, onPrev, onNext, onMove,
     listeners.forEach(([element, callback]) => element.removeEventListener('click', callback));
     for (const [element, snapshot] of snapshots) {
       restoreAttributes(element, snapshot.attributes);
+
+      if (element instanceof HTMLProgressElement) {
+        for (const name of ['max', 'value']) {
+          if (originalAttribute(snapshot, name) === null) element.removeAttribute(name);
+        }
+      }
+
       if (element.hasAttribute('fs-current') || element.hasAttribute('fs-total')) {
         element.replaceChildren(...snapshot.childNodes);
       }

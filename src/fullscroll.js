@@ -112,6 +112,7 @@ export default class FullScroll {
       isDisabled: () => this.manualDisabled,
       isResponsive: () => this.responsive,
       isActive: () => this.active,
+      isMoving: () => this.moving,
       onEnter: () => this.disableForResponsive(),
       onExit: () => this.enableFromResponsive(),
       onResize: () => this.resizeRuntime(),

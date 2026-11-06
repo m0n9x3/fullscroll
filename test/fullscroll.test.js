@@ -1611,4 +1611,71 @@ describe('FullScroll 1.3.0', () => {
     expect(FullScroll.get(root)).toBeNull();
     expect(FakeSwiper.instances.every((swiper) => swiper.destroyed)).toBe(true);
   });
+
+  it('ignores keyboard input that starts outside the fs root', async () => {
+    document.body.innerHTML = `
+      <div id="modal"><div id="modal-panel" tabindex="-1">Modal</div></div>
+      <main fs><section>A</section><section>B</section></main>
+    `;
+    const instance = create(document.querySelector('[fs]'));
+    const panel = document.getElementById('modal-panel');
+    const outside = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+
+    panel.dispatchEvent(outside);
+    await Promise.resolve();
+
+    expect(outside.defaultPrevented).toBe(false);
+    expect(instance.state.currentIndex).toBe(0);
+
+    instance.pages[0].dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+    );
+    await Promise.resolve();
+
+    expect(instance.state.currentIndex).toBe(1);
+  });
+
+  it('keeps author attributes, classes, and styles across refresh and destroy', () => {
+    document.body.innerHTML = `
+      <main fs>
+        <section id="author-page" class="author-page" data-state="closed" style="color: tomato">A</section>
+        <section>B</section>
+      </main>
+    `;
+    const root = document.querySelector('[fs]');
+    const page = document.getElementById('author-page');
+    const instance = create(root);
+
+    page.classList.add('is-open');
+    page.setAttribute('data-state', 'open');
+    page.setAttribute('aria-expanded', 'true');
+
+    instance.refresh();
+
+    expect(page.getAttribute('data-state')).toBe('open');
+    expect(page.getAttribute('aria-expanded')).toBe('true');
+    expect(page.classList.contains('is-open')).toBe(true);
+    expect(page.classList.contains('author-page')).toBe(true);
+    expect(page.classList.contains('swiper-slide')).toBe(true);
+    expect(page.style.color).toBe('tomato');
+
+    page.classList.add('swiper-slide-active');
+    instance.destroy();
+
+    expect(page.getAttribute('data-state')).toBe('open');
+    expect(page.getAttribute('aria-expanded')).toBe('true');
+    expect(page.classList.contains('is-open')).toBe(true);
+    expect(page.classList.contains('author-page')).toBe(true);
+    expect(page.classList.contains('swiper-slide')).toBe(false);
+    expect(page.classList.contains('swiper-slide-active')).toBe(false);
+    expect(page.hasAttribute('fs-active')).toBe(false);
+    expect(page.hasAttribute('inert')).toBe(false);
+    expect(page.style.color).toBe('tomato');
+    expect(root.hasAttribute('style')).toBe(false);
+    expect(root.classList.contains('fs-root')).toBe(false);
+  });
 });
