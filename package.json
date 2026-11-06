@@ -50,6 +50,14 @@
     "typescript": "^7.0.2",
     "vitest": "^3.0.0"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m0n9x3/fullscroll.git"
+  },
+  "homepage": "https://github.com/m0n9x3/fullscroll#readme",
+  "bugs": {
+    "url": "https://github.com/m0n9x3/fullscroll/issues"
+  },
   "keywords": [
     "fullpage",
     "scroll",
