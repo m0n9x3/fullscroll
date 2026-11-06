@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FullScroll browser fixture</title>
+    <link rel="stylesheet" href="/node_modules/swiper/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="/src/fullscroll.css" />
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+      }
+
+      [fs] section {
+        display: grid;
+        place-content: center;
+      }
+
+      [fs] #page-scroll {
+        display: block;
+      }
+
+      #scroll-body {
+        height: 300vh;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      #outside-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.4);
+      }
+
+      #outside-modal[hidden] {
+        display: none;
+      }
+
+      #outside-panel {
+        width: 240px;
+        margin: 96px auto;
+        padding: 16px;
+        background: #fff;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "swiper/bundle": "/node_modules/swiper/swiper-bundle.mjs"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="outside-modal" hidden>
+      <div id="outside-panel" role="dialog" aria-modal="true" tabindex="-1">
+        Outside modal
+      </div>
+    </div>
+
+    <main fs>
+      <section id="page-one" fs-anchor="one" tabindex="-1">
+        <h1>One</h1>
+        <button id="one-button" type="button">Button</button>
+      </section>
+      <section id="page-two" fs-anchor="two"><h1>Two</h1></section>
+      <section id="page-scroll" fs-anchor="scroll" fs-scroll>
+        <div id="scroll-body">Scrollable content</div>
+      </section>
+      <section id="page-four" fs-anchor="four"><h1>Four</h1></section>
+    </main>
+
+    <script>
+      window.__lastKeydown = null;
+      window.addEventListener('keydown', (event) => {
+        window.__lastKeydown = {
+          key: event.key,
+          prevented: event.defaultPrevented,
+          target: event.target instanceof Element ? event.target.id : null,
+        };
+      });
+    </script>
+    <script type="module">
+      import Swiper from 'swiper/bundle';
+      import FullScroll from '/src/index.js';
+
+      if (typeof Swiper !== 'function') {
+        throw new Error('Swiper bundle did not load');
+      }
+
+      window.addEventListener('load', () => {
+        window.fullscroll = new FullScroll('[fs]', {
+          Swiper,
+          speed: 100,
+          wheelIdle: 600,
+          wheelThreshold: 40,
+          history: false,
+        });
+      });
+    </script>
+  </body>
+</html>

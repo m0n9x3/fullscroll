@@ -35,12 +35,14 @@
     "test:watch": "vitest",
     "check:types": "tsc -p tsconfig.types.json",
     "check:dist": "node scripts/check-build.mjs",
-    "check": "node scripts/check-source.mjs && vitest run && npm run build && npm run check:types && npm run check:dist"
+    "check": "node scripts/check-source.mjs && vitest run && npm run build && npm run check:types && npm run check:dist",
+    "test:browser": "playwright test"
   },
   "peerDependencies": {
     "swiper": ">=14.0.0 <15.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "esbuild": "^0.25.0",
     "gsap": "^3.15.0",
     "jsdom": "^26.0.0",
